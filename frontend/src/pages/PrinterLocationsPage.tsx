@@ -332,9 +332,7 @@ export function PrinterLocationsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(t('printers.locations.bulkMoved', '{{count}} printers moved', {
-        count: selectedPrinterIds.size,
-      }));
+      showToast(`${selectedPrinterIds.size} ${pluralize(selectedPrinterIds.size, ['принтер перемещён', 'принтера перемещено', 'принтеров перемещено'])}`);
       clearSelection();
       setShowBulkMove(false);
     },
@@ -396,9 +394,7 @@ export function PrinterLocationsPage() {
         removeLocationColor(name);
       });
       queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(t('printers.locations.groupsDeleted', '{{count}} group(s) deleted', {
-        count: groupNames.length,
-      }));
+      showToast(`${groupNames.length} ${pluralize(groupNames.length, ['группа удалена', 'группы удалено', 'групп удалено'])}`);
       clearGroupSelection();
       setGroupSelectionMode(false);
       setDeleteConfirm(null);
@@ -512,6 +508,16 @@ export function PrinterLocationsPage() {
     setSelectedGroupNames(new Set());
   };
 
+  // Russian pluralization helper for count-based nouns
+  const pluralize = (count: number, forms: [one: string, few: string, many: string]) => {
+    const abs = Math.abs(count) % 100;
+    const lastDigit = abs % 10;
+    if (abs > 10 && abs < 20) return forms[2];
+    if (lastDigit === 1) return forms[0];
+    if (lastDigit >= 2 && lastDigit <= 4) return forms[1];
+    return forms[2];
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -534,10 +540,7 @@ export function PrinterLocationsPage() {
           </h1>
         </div>
         <p className="text-sm text-bambu-gray">
-          {t('printers.locations.subtitle', '{{grouped}} grouped, {{ungrouped}} ungrouped', {
-            grouped: groupedCount,
-            ungrouped: ungroupedCount,
-          })}
+          {t('printers.locations.subtitle', `${groupedCount} ${pluralize(groupedCount, ['в группе', 'в группах', 'в группах'])}, ${ungroupedCount} ${pluralize(ungroupedCount, ['без группы', 'без группы', 'без группы'])}`)}
         </p>
       </div>
 
@@ -857,7 +860,7 @@ export function PrinterLocationsPage() {
             <div className="pt-4 border-t border-bambu-dark-tertiary">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-bambu-gray">
-                  {t('printers.locations.ungroupedPrinters', 'Ungrouped Printers')}, {ungroupedCount} {ungroupedCount === 1 ? t('printers.locations.printer') : t('printers.locations.printers')}
+                  {t('printers.locations.ungroupedPrinters', 'Ungrouped Printers')}, {ungroupedCount} {(() => { const n = ungroupedCount % 100; return n > 10 && n < 20 ? t('printers.locations.printers') : n % 10 === 1 ? t('printers.locations.printer') : n % 10 >= 2 && n % 10 <= 4 ? t('printers.locations.printer') : t('printers.locations.printers'); })()}
                 </h3>
                 <button
                   type="button"
@@ -987,7 +990,7 @@ export function PrinterLocationsPage() {
       {selectedPrinterIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-bambu-dark border border-bambu-dark-tertiary rounded-xl shadow-2xl px-6 py-4 flex items-center gap-4 z-40">
           <div className="text-white text-sm">
-            {t('printers.locations.selected', '{{count}} selected', { count: selectedPrinterIds.size })}
+            {`${selectedPrinterIds.size} ${pluralize(selectedPrinterIds.size, ['выбран', 'выбраны', 'выбрано'])}`}
           </div>
           <Button
             onClick={() => setShowBulkMove(true)}
@@ -1012,7 +1015,7 @@ export function PrinterLocationsPage() {
       {selectedGroupNames.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-bambu-dark border border-bambu-dark-tertiary rounded-xl shadow-2xl px-6 py-4 flex items-center gap-4 z-40">
           <div className="text-white text-sm">
-            {t('printers.locations.selected', '{{count}} selected', { count: selectedGroupNames.size })}
+            {`${selectedGroupNames.size} ${pluralize(selectedGroupNames.size, ['выбрана', 'выбраны', 'выбрано'])}`}
           </div>
           <Button
             onClick={() => {
@@ -1056,7 +1059,7 @@ export function PrinterLocationsPage() {
                 {t('printers.locations.moveSelectedTitle', 'Move Printers')}
               </h2>
               <p className="text-sm text-bambu-gray">
-                {t('printers.locations.moveSelectedCount', '{{count}} printers', { count: selectedPrinterIds.size })}
+                {`${selectedPrinterIds.size} ${pluralize(selectedPrinterIds.size, ['принтер', 'принтера', 'принтеров'])}`}
               </p>
               <select
                 value={bulkMoveTarget}
@@ -1207,12 +1210,9 @@ export function PrinterLocationsPage() {
             ? t('printers.locations.deleteSelectedGroupsTitle', 'Delete Selected Groups')
             : t('printers.locations.deleteTitle', 'Delete Location')}
           message={deleteConfirm.isBulkDelete
-            ? t('printers.locations.deleteSelectedGroupsDescription', 'Are you sure? This will remove {{count}} group(s) and ungroup all printers in them.', {
-                count: deleteConfirm.count,
-              })
-            : t('printers.locations.deleteDescription', 'Are you sure? This will remove this location from {{count}} printer(s).', {
-                count: deleteConfirm.count,
-              })}
+            ? `${deleteConfirm.count} ${pluralize(deleteConfirm.count, ['группа будет удалена', 'группы будут удалены', 'групп будет удалено'])} и все принтеры в них будут без группы`
+            : `Вы уверены? Группа будет удалена у ${deleteConfirm.count} ${pluralize(deleteConfirm.count, ['принтера', 'принтеров', 'принтеров'])}`
+          }
           confirmText={deleteConfirm.isBulkDelete
             ? t('printers.locations.deleteConfirm', 'Delete')
             : t('printers.locations.deleteConfirm', 'Delete')}
