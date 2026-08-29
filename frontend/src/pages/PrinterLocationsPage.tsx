@@ -421,8 +421,9 @@ export function PrinterLocationsPage() {
       return;
     }
     // Cache the new location for future autocomplete
-    addCachedPrinterLocation(newLocationName);
-    createLocationMutation.mutate(newLocationName.trim());
+    const trimmedName = newLocationName.trim();
+    addCachedPrinterLocation(trimmedName);
+    createLocationMutation.mutate(trimmedName);
   };
 
   const handleCancelCreate = () => {
@@ -818,12 +819,12 @@ export function PrinterLocationsPage() {
                                         }`}
                                       >
                                         {state === 'RUNNING'
-                                          ? 'Printing'
+                                          ? t('printers.status.printing')
                                           : state === 'PAUSE'
-                                          ? 'Paused'
+                                          ? t('printers.status.paused')
                                           : state === 'FINISH'
-                                          ? 'Finished'
-                                          : 'Idle'}
+                                          ? t('printers.status.finished')
+                                          : t('printers.status.idle')}
                                       </span>
                                     ) : (
                                       <span className="text-xs px-2 py-1 rounded-full bg-gray-500/20 text-gray-400">
@@ -961,12 +962,12 @@ export function PrinterLocationsPage() {
                             }`}
                           >
                             {state === 'RUNNING'
-                              ? 'Printing'
+                              ? t('printers.status.printing')
                               : state === 'PAUSE'
-                              ? 'Paused'
+                              ? t('printers.status.paused')
                               : state === 'FINISH'
-                              ? 'Finished'
-                              : 'Idle'}
+                              ? t('printers.status.finished')
+                              : t('printers.status.idle')}
                           </span>
                         ) : (
                           <span className="text-xs px-2 py-1 rounded-full bg-gray-500/20 text-gray-400">
@@ -1030,12 +1031,10 @@ export function PrinterLocationsPage() {
           <Button
             onClick={() => {
               const names = Array.from(selectedGroupNames);
-              const printerCount = (printers || []).filter((p) =>
-                names.includes((p.location || ''))
-              ).length;
+              const groupCount = names.length;
               setDeleteConfirm({
                 name: names.join(', '),
-                count: printerCount,
+                count: groupCount,
                 isBulkDelete: true,
                 names,
               });
@@ -1222,9 +1221,7 @@ export function PrinterLocationsPage() {
           message={deleteConfirm.isBulkDelete
             ? pluralize(deleteConfirm.count, t('printers.locations.deleteSelectedGroupsDescription_one'), t('printers.locations.deleteSelectedGroupsDescription_few'), t('printers.locations.deleteSelectedGroupsDescription_many'))
             : pluralize(deleteConfirm.count, t('printers.locations.deleteDescription_one'), t('printers.locations.deleteDescription_few'), t('printers.locations.deleteDescription_many'))}
-          confirmText={deleteConfirm.isBulkDelete
-            ? t('printers.locations.deleteConfirm', 'Delete')
-            : t('printers.locations.deleteConfirm', 'Delete')}
+          confirmText={t('printers.locations.deleteConfirm', 'Delete')}
           variant="danger"
           isLoading={bulkDeleteGroupsMutation.isPending || deleteLocationMutation.isPending}
         />
