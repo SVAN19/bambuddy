@@ -855,9 +855,36 @@ export function PrinterLocationsPage() {
           {/* Ungrouped printers list */}
           {ungroupedCount > 0 && (
             <div className="pt-4 border-t border-bambu-dark-tertiary">
-              <h3 className="text-sm font-medium text-bambu-gray mb-3">
-                {t('printers.locations.ungroupedPrinters', 'Ungrouped Printers')}, {ungroupedCount} {ungroupedCount === 1 ? t('printers.locations.printer') : t('printers.locations.printers')}
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-bambu-gray">
+                  {t('printers.locations.ungroupedPrinters', 'Ungrouped Printers')}, {ungroupedCount} {ungroupedCount === 1 ? t('printers.locations.printer') : t('printers.locations.printers')}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allUngroupedIds = new Set(getPrintersInLocation('').map(p => p.id));
+                    setSelectedPrinterIds(prev => {
+                      const next = new Set(prev);
+                      const allSelected = Array.from(allUngroupedIds).every(id => next.has(id));
+                      if (allSelected) {
+                        allUngroupedIds.forEach(id => next.delete(id));
+                      } else {
+                        allUngroupedIds.forEach(id => next.add(id));
+                      }
+                      return next;
+                    });
+                  }}
+                  className="text-xs text-bambu-green hover:text-bambu-green-light transition-colors"
+                >
+                  {(() => {
+                    const allUngroupedIds = getPrintersInLocation('').map(p => p.id);
+                    const allSelected = allUngroupedIds.length > 0 && allUngroupedIds.every(id => selectedPrinterIds.has(id));
+                    return allSelected
+                      ? t('common.deselectAll', 'Deselect all')
+                      : t('common.selectAll', 'Select all');
+                  })()}
+                </button>
+              </div>
               <div className="space-y-2">
                 {getPrintersInLocation('').map((printer) => {
                   const status = getPrinterStatus(printer.id);
