@@ -73,6 +73,13 @@ export function PrinterLocationsPage() {
   const [groupSelectionMode, setGroupSelectionMode] = useState(false);
   const [selectedGroupNames, setSelectedGroupNames] = useState<Set<string>>(new Set());
 
+  // Collapse expanded groups when entering group selection mode
+  useEffect(() => {
+    if (groupSelectionMode) {
+      setExpandedLocation(null);
+    }
+  }, [groupSelectionMode]);
+
   // Group sort mode — persisted in localStorage
   const [sortMode, setSortMode] = useState<'name-asc' | 'name-desc' | 'count-asc' | 'count-desc'>(() => {
     try {
