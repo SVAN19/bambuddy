@@ -223,7 +223,15 @@ export default {
   // Printers page
   printers: {
     title: 'Printers',
-    addPrinter: 'Add Printer',
+    addPrinter: {
+      label: 'Add Printer',
+      subtitle: 'Add a new Bambu Lab printer to your fleet',
+    },
+    manualAdd: {
+      label: 'Manual Add',
+      printerInfo: 'Printer Info',
+      configuration: 'Configuration',
+    },
     addPreflight: {
       checking: 'Checking connection...',
       warning: 'Some connection checks failed. This printer may show as offline. Review the checks below, fix what you can, or save anyway.',
@@ -565,9 +573,15 @@ export default {
       locationGroup: 'Location / Group (optional)',
       locationPlaceholder: 'e.g., Workshop, Office, Basement',
       autoArchiveLabel: 'Auto-archive completed prints',
+      autoArchiveHelp: 'Automatically archive completed prints',
       fromPrinterSettings: 'From printer settings',
       modelOptional: 'Model (optional)',
       saveChanges: 'Save Changes',
+      closeConfirm: {
+        title: 'Close without saving?',
+        message: 'You have unsaved changes. Are you sure you want to close?',
+        confirm: 'Close',
+      },
     },
     // Skip objects
     skipObjects: {
@@ -674,6 +688,8 @@ export default {
       customSubnetOption: 'Custom subnet...',
       customSubnetLabel: 'Custom subnet (CIDR)',
       customSubnetNote: 'Use a custom subnet if your printer is on a different network than this server. The FTP (990) and MQTT (8883) ports must be reachable across the routing boundary.',
+      resetCache: 'Reset cache and scan again',
+      autoDiscover: 'Auto Discover',
     },
     // AMS Drying
     drying: {
