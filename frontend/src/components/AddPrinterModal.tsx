@@ -6,7 +6,7 @@ import type { PrinterCreate, DiscoveredPrinter, PrinterDiagnosticResult } from '
 import { Card, CardContent } from './Card';
 import { Button } from './Button';
 import { ConfirmModal } from './ConfirmModal';
-import { ConnectionDiagnosticModal } from './ConnectionDiagnostic';
+import { ConnectionDiagnosticModal, DiagnosticChecklist } from './ConnectionDiagnostic';
 
 // Map SSDP model codes to display names
 function mapModelCode(ssdpModel: string | null): string {
@@ -57,13 +57,21 @@ export function AddPrinterModal({
   onClose,
   onAdd,
   existingSerials,
+  onAsyncAdd,
+  initialFormData,
+  diagnosticResult,
+  showRetryWarning: showRetryWarningProp,
 }: {
   onClose: () => void;
   onAdd: (data: PrinterCreate) => void;
   existingSerials: string[];
+  onAsyncAdd?: (data: PrinterCreate) => void;
+  initialFormData?: PrinterCreate;
+  diagnosticResult?: any;
+  showRetryWarning?: boolean;
 }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState<PrinterCreate>({
+  const [form, setForm] = useState<PrinterCreate>(initialFormData || {
     name: '',
     serial_number: '',
     ip_address: '',
@@ -72,6 +80,46 @@ export function AddPrinterModal({
     location: '',
     auto_archive: true,
   });
+
+  // Sync form with initialFormData when it changes (retry scenario)
+  useEffect(() => {
+    if (initialFormData) {
+      setForm(initialFormData);
+      // Switch to manual tab when retrying with data
+      setActiveTab('manual');
+    }
+  }, [initialFormData]);
+
+  // Countdown state for closing confirmation
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showRetryWarning, setShowRetryWarning] = useState(showRetryWarningProp || false);
+
+  // Sync showRetryWarning prop with state
+  useEffect(() => {
+    if (showRetryWarningProp) {
+      setShowRetryWarning(true);
+    }
+  }, [showRetryWarningProp]);
+
+  // Start countdown before closing
+  const startClosingCountdown = useCallback(() => {
+    setCountdown(3);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null) {
+          clearInterval(timer);
+          return 0;
+        }
+        if (prev <= 1) {
+          clearInterval(timer);
+          onClose();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [onClose]);
 
   // Cache key for localStorage
   const CACHE_KEY = 'bambuddy.discovery.cache';
@@ -146,23 +194,48 @@ export function AddPrinterModal({
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCheckingSave(true);
-    try {
-      const result = await api.diagnoseConnection({
-        ip_address: form.ip_address.trim(),
-        serial_number: form.serial_number.trim() || undefined,
-        access_code: form.access_code || undefined,
-      });
-      if (result.checks.some((c) => c.status === 'fail')) {
-        setSaveWarning(result);
-        return;
+    setIsSubmitting(true);
+    
+    if (onAsyncAdd) {
+      // Async mode: show countdown then close, parent handles async flow with toasts
+      startClosingCountdown();
+      // Start async add after a short delay to let countdown start
+      setTimeout(() => {
+        onAsyncAdd(form);
+      }, 100);
+    } else {
+      // Fallback: old behavior (synchronous)
+      setCheckingSave(true);
+      try {
+        const result = await api.diagnoseConnection({
+          ip_address: form.ip_address.trim(),
+          serial_number: form.serial_number.trim() || undefined,
+          access_code: form.access_code || undefined,
+        });
+        if (result.checks.some((c) => c.status === 'fail')) {
+          setSaveWarning(result);
+          return;
+        }
+      } catch {
+        // Diagnostic infrastructure failed — never block the save on it.
+      } finally {
+        setCheckingSave(false);
       }
-    } catch {
-      // Diagnostic infrastructure failed — never block the save on it.
-    } finally {
-      setCheckingSave(false);
+      onAdd(form);
     }
-    onAdd(form);
+  };
+
+  // Force add without diagnostic
+  const handleForceAdd = async () => {
+    if (onAsyncAdd) {
+      startClosingCountdown();
+      setTimeout(() => {
+        onAsyncAdd(form);
+      }, 100);
+    } else {
+      // Skip diagnostic, add directly
+      onAdd(form);
+    }
   };
 
   const startDiscovery = async () => {
@@ -310,7 +383,7 @@ export function AddPrinterModal({
   return (
     <>
     <div
-      className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 p-4 overflow-y-auto"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       onClick={handleOutsideClick}
     >
       <Card className="w-full max-w-lg my-auto max-h-[calc(100vh-2rem)] overflow-y-auto" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
@@ -501,7 +574,7 @@ export function AddPrinterModal({
           )}
 
           {/* Manual Form Section */}
-          {activeTab === 'manual' && (
+          {activeTab === 'manual' && countdown === null && (
           <form onSubmit={handleAddSubmit} className="space-y-4">
             {/* Printer Info Section */}
             <div className="space-y-3">
@@ -646,6 +719,24 @@ export function AddPrinterModal({
 
             {/* Diagnostic & Actions */}
             <div className="pt-2 space-y-3">
+              {showRetryWarning && (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      {t('printers.toast.lastConnectionFailed')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowRetryWarning(false)}
+                    className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline"
+                  >
+                    {t('common.dismiss')}
+                  </button>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => setShowDiagnostic(true)}
@@ -688,6 +779,24 @@ export function AddPrinterModal({
               )}
             </div>
           </form>
+          )}
+
+          {/* Countdown Banner — replaces form when on manual tab */}
+          {activeTab === 'manual' && countdown !== null && countdown > 0 && (
+            <div className="space-y-4">
+              <div className="p-6 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-4">
+                <Loader2 className="w-8 h-8 text-blue-400 animate-spin flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-base text-white font-medium">
+                    {t('printers.toast.dataReceived')}
+                  </p>
+                  <p className="text-sm text-bambu-gray mt-1">
+                    {t('printers.toast.closingIn', { seconds: countdown })}
+                  </p>
+                </div>
+                <div className="text-4xl font-bold text-blue-400">{countdown}</div>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

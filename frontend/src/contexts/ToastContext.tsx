@@ -36,15 +36,17 @@ interface DispatchToastData {
 
 interface ToastAction {
   label: string;
-  href: string;
+  href?: string;
   onClick?: () => void;
+  disabled?: boolean;
+  tooltip?: string;
 }
 
 type ShowPersistentToast = (
   id: string,
   message: string,
   type?: ToastType,
-  options?: { action?: ToastAction },
+  options?: { action?: ToastAction; actions?: ToastAction[] },
 ) => void;
 
 interface Toast {
@@ -53,6 +55,7 @@ interface Toast {
   type: ToastType;
   persistent?: boolean;
   action?: ToastAction;
+  actions?: ToastAction[];
   dispatchData?: DispatchToastData;
 }
 
@@ -176,17 +179,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const showPersistentToast = useCallback(
-    (id: string, message: string, type: ToastType = 'info', options?: { action?: ToastAction }) => {
+    (id: string, message: string, type: ToastType = 'info', options?: { action?: ToastAction; actions?: ToastAction[] }) => {
       if (!isMountedRef.current) return;
       setToasts((prev) => {
         // Update existing toast if same id, otherwise add new one
         const exists = prev.find((t) => t.id === id);
         if (exists) {
           return prev.map((t) =>
-            t.id === id ? { ...t, message, type, persistent: true, action: options?.action } : t,
+            t.id === id ? { ...t, message, type, persistent: true, action: options?.action, actions: options?.actions } : t,
           );
         }
-        return [...prev, { id, message, type, persistent: true, action: options?.action }];
+        return [...prev, { id, message, type, persistent: true, action: options?.action, actions: options?.actions }];
       });
     },
     [],
@@ -475,7 +478,32 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <>
                 {icons[toast.type]}
                 <span className="text-white text-sm">{toast.message}</span>
-                {toast.action && (
+                {toast.actions && toast.actions.length > 0 && (
+                  <div className="flex gap-2">
+                    {toast.actions.map((action, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          if (!action.disabled) {
+                            action.onClick?.();
+                            // Dismiss toast after a short delay to let onClick complete
+                            setTimeout(() => dismissToast(toast.id), 100);
+                          }
+                        }}
+                        disabled={action.disabled}
+                        title={action.tooltip || ''}
+                        className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
+                          action.disabled
+                            ? 'bg-bambu-dark-tertiary text-bambu-gray/50 cursor-not-allowed'
+                            : 'bg-bambu-green/20 text-bambu-green hover:bg-bambu-green/30 cursor-pointer'
+                        }`}
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {toast.action && !toast.actions && (
                   <a
                     href={toast.action.href}
                     target="_blank"

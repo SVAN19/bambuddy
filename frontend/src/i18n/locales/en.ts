@@ -33,6 +33,11 @@ export default {
     installAppSuccess: 'Bambuddy was installed',
   },
 
+  // Diagnostic
+  diagnostic: {
+    checklistTitle: 'Connection Diagnostics',
+  },
+
   // Common
   common: {
     plusNMore: '+{{count}} more',
@@ -471,7 +476,17 @@ export default {
       printerUpdated: 'Printer updated',
       failedToDelete: 'Failed to delete printer',
       failedToAdd: 'Failed to add printer',
+      checkingConnection: 'Checking connection to printer...',
+      addingPrinter: 'Adding printer "{{printerName}}"...',
+      printerAddedSuccess: 'Printer "{{printerName}}" added successfully!',
       connectionFailedNotAdded: 'Could not connect to the printer. Verify the IP, serial number, and access code, and confirm LAN-only mode is on. The printer was not added.',
+      connectionWarning: 'Connection check failed, but you can still add the printer. It may show as offline initially.',
+      retry: 'Retry',
+      addAnyway: 'Add anyway (Coming soon)',
+      addAnywayDisabled: 'Force add without diagnostic check - coming soon',
+      lastConnectionFailed: 'Last connection attempt failed. The printer may be offline or the entered data (access code or serial number) may be incorrect. Check the data or click RUN DIAGNOSTIC to get more information about the connection error.',
+      dataReceived: 'Data received — printer will be added after verification',
+      closingIn: 'Closing in {{seconds}}s...',
       failedToUpdate: 'Failed to update printer',
       commandSent: 'Command sent',
       failedToSendCommand: 'Failed to send command',
