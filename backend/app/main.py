@@ -8767,9 +8767,13 @@ async def lifespan(app: FastAPI):
     # Startup
     # Install Windows-only asyncio Proactor cleanup-RST filter (#1113) before
     # anything else can spawn tasks that might trip it.
-    from backend.app.core.asyncio_handlers import install_proactor_reset_filter
+    from backend.app.core.asyncio_handlers import install_proactor_reset_filter, warn_if_running_on_uvloop
 
     install_proactor_reset_filter()
+
+    # Before init_db, so the warning is near the top of the log rather than
+    # below a migration run. See warn_if_running_on_uvloop for what is at stake.
+    warn_if_running_on_uvloop()
 
     await init_db()
 
