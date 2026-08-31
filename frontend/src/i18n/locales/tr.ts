@@ -670,6 +670,7 @@ export default {
       customSubnetOption: 'Özel alt ağ...',
       customSubnetLabel: 'Özel alt ağ (CIDR)',
       customSubnetNote: 'Yazıcınız bu sunucudan farklı bir ağda ise özel bir alt ağ kullanın. FTP (990) ve MQTT (8883) bağlantı noktaları yönlendirme sınırı boyunca erişilebilir olmalıdır.',
+      resetCache: 'Önbelleği sıfırla ve tekrar tara',
     },
     // AMS Kurutma
     drying: {

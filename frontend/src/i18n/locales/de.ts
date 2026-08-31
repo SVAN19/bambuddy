@@ -670,6 +670,7 @@ export default {
       customSubnetOption: 'Eigenes Subnetz...',
       customSubnetLabel: 'Eigenes Subnetz (CIDR)',
       customSubnetNote: 'Wähle ein eigenes Subnetz, wenn dein Drucker in einem anderen Netzwerk als dieser Server steht. Die Ports FTP (990) und MQTT (8883) müssen über die Routinggrenze erreichbar sein.',
+      resetCache: 'Cache zurücksetzen und neu scannen',
     },
     // AMS Drying
     drying: {

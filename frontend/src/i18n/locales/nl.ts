@@ -673,6 +673,7 @@ export default {
       customSubnetOption: 'Aangepast subnet...',
       customSubnetLabel: 'Aangepast subnet (CIDR)',
       customSubnetNote: 'Gebruik een aangepast subnet als je printer zich op een ander netwerk bevindt dan deze server. De FTP-poort (990) en MQTT-poort (8883) moeten bereikbaar zijn over de routeringsgrens.',
+      resetCache: 'Cache wissen en opnieuw scannen',
     },
     // AMS Drying
     drying: {

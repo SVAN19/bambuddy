@@ -673,6 +673,7 @@ export default {
       customSubnetOption: "Спеціальна підмережа...",
       customSubnetLabel: "Спеціальна підмережа (CIDR)",
       customSubnetNote: "Укажіть власну підмережу, якщо принтер перебуває в іншій мережі, ніж сервер. Порти FTP (990) і MQTT (8883) мають бути доступні через маршрутизатор.",
+      resetCache: "Скинути кеш і сканувати знову",
     },
     // AMS Drying
     drying: {

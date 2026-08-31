@@ -669,6 +669,7 @@ export default {
       customSubnetOption: 'カスタムサブネット...',
       customSubnetLabel: 'カスタムサブネット (CIDR)',
       customSubnetNote: 'プリンターがこのサーバーと別のネットワークにある場合は、カスタムサブネットを使用してください。FTP (990) と MQTT (8883) のポートが、ルーティング境界を越えて到達可能である必要があります。',
+      resetCache: 'キャッシュをリセットして再スキャン',
     },
     // AMS Drying
     drying: {

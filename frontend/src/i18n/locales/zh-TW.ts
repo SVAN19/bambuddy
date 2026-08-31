@@ -670,6 +670,7 @@ export default {
       customSubnetOption: '自訂子網路...',
       customSubnetLabel: '自訂子網路 (CIDR)',
       customSubnetNote: '如果您的印表機與此伺服器位於不同的網路中，請使用自訂子網路。FTP (990) 和 MQTT (8883) 連接埠必須能夠跨越路由邊界存取。',
+      resetCache: '重設快取並重新掃描',
     },
     // AMS Drying
     drying: {

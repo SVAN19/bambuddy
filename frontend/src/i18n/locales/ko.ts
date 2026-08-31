@@ -633,6 +633,7 @@ export default {
       customSubnetOption: '사용자 지정 서브넷...',
       customSubnetLabel: '사용자 지정 서브넷 (CIDR)',
       customSubnetNote: '프린터가 이 서버와 다른 네트워크에 있는 경우 사용자 지정 서브넷을 사용하세요. FTP (990) 및 MQTT (8883) 포트가 라우팅 경계를 통해 접근 가능해야 합니다.',
+      resetCache: '캐시 초기화 및 다시 스캔',
     },
     drying: {
       start: '건조 시작',
