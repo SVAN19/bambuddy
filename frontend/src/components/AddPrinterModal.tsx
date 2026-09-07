@@ -6,6 +6,7 @@ import type { PrinterCreate, DiscoveredPrinter, PrinterDiagnosticResult } from '
 import { getCachedPrinterLocations, addCachedPrinterLocation } from '../utils/printerLocationsCache';
 import { getLocationIcon } from '../utils/printerLocationIcons';
 import { getLocationColor } from '../utils/printerLocationColors';
+import { AVAILABLE_ICONS, getIconByName } from '../components/IconPicker';
 import { Card, CardContent } from './Card';
 import { Button } from './Button';
 import { ConfirmModal } from './ConfirmModal';
@@ -106,56 +107,6 @@ export function AddPrinterModal({
   const filteredLocations = cachedLocations.filter((loc) =>
     loc.toLowerCase().includes(locationInput.toLowerCase())
   );
-
-  // Get icon component for a location
-  const getLocationIconComponent = useCallback((locationName: string) => {
-    const iconName = getLocationIcon(locationName);
-    if (!iconName) return null;
-    
-    // Map common icon names to lucide-react components
-    const iconMap: Record<string, any> = {
-      'home': Home,
-      'wrench': Wrench,
-      'coffee': Coffee,
-      'briefcase': Briefcase,
-      'building': Building2,
-      'car': Car,
-      'heart': Heart,
-      'book': BookOpen,
-      'dumbbell': Dumbbell,
-      'music': Music,
-      'gamepad': Gamepad2,
-      'leaf': Leaf,
-      'palette': Palette,
-      'monitor': Monitor,
-      'utensils': Utensils,
-      'shopping': ShoppingBag,
-      'gift': Gift,
-      'star': Star,
-      'crown': Crown,
-      'shield': Shield,
-      'zap': Zap,
-      'sun': Sun,
-      'moon': Moon,
-      'cloud': Cloud,
-      'snowflake': Snowflake,
-      'flame': Flame,
-      'anchor': Anchor,
-      'plane': Plane,
-      'train': Train,
-      'bike': Bike,
-      'truck': Truck,
-      'box': FolderPlus,
-    };
-    
-    const IconComponent = iconMap[iconName.toLowerCase()];
-    return IconComponent || FolderPlus;
-  }, []);
-
-  // Get color for a location
-  const getLocationColorValue = useCallback((locationName: string) => {
-    return getLocationColor(locationName);
-  }, []);
 
   // Sync locationInput with form.location when form changes externally
   useEffect(() => {
@@ -801,8 +752,9 @@ export function AddPrinterModal({
                     {showLocationSuggestions && filteredLocations.length > 0 && (
                       <div className="absolute z-50 mt-1 w-full bg-bambu-dark border border-bambu-dark-tertiary rounded-lg shadow-xl max-h-48 overflow-y-auto">
                         {filteredLocations.map((loc) => {
-                          const IconComponent = getLocationIconComponent(loc);
-                          const color = getLocationColorValue(loc);
+                          const iconName = getLocationIcon(loc);
+                          const color = getLocationColor(loc);
+                          const IconComponent = iconName ? getIconByName(iconName) : null;
                           return (
                             <button
                               key={loc}
@@ -814,7 +766,7 @@ export function AddPrinterModal({
                                 setShowLocationSuggestions(false);
                               }}
                             >
-                              {IconComponent && (
+                              {IconComponent ? (
                                 <div
                                   className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
                                   style={{ backgroundColor: color ? color + '20' : undefined, border: color ? `1px solid ${color}40` : undefined }}
@@ -824,8 +776,7 @@ export function AddPrinterModal({
                                     style={{ color: color || undefined }}
                                   />
                                 </div>
-                              )}
-                              {!IconComponent && (
+                              ) : (
                                 <div
                                   className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 bg-bambu-dark-tertiary"
                                 >
