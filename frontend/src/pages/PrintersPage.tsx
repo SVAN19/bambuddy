@@ -9176,7 +9176,7 @@ export function PrintersPage() {
         </div>
       )}
       <Button
-        onClick={() => openAddModal()}
+        onClick={() => openAddModal(printers?.map(p => p.serial_number) || [])}
         disabled={!hasPermission('printers:create')}
         title={!hasPermission('printers:create') ? t('printers.permission.noAdd') : undefined}
         className={`!h-8 !min-h-8 px-2 py-0 ${inMenu ? 'w-full' : ''}`}
@@ -9263,7 +9263,7 @@ export function PrintersPage() {
           <CardContent className="text-center py-12">
             <p className="text-bambu-gray mb-4">{t('printers.noPrintersConfigured')}</p>
             <Button
-              onClick={() => openAddModal()}
+              onClick={() => openAddModal(printers?.map(p => p.serial_number) || [])}
               disabled={!hasPermission('printers:create')}
               title={!hasPermission('printers:create') ? t('printers.permission.noAdd') : undefined}
             >
@@ -9475,7 +9475,7 @@ export function PrintersPage() {
           onClose={closeAddModal}
           onAdd={addPrinter}
           onAsyncAdd={asyncAddPrinter}
-          existingSerials={printers?.map(p => p.serial_number) || []}
+          existingSerials={existingSerials}
           initialFormData={isRetryActive ? (retryAddData || undefined) : undefined}
           diagnosticResult={isRetryActive ? diagnosticResult : null}
           showRetryWarning={showRetryWarning}

@@ -11,7 +11,8 @@ interface AddPrinterContextType {
   isRetryActive: boolean;
   diagnosticResult: PrinterDiagnosticResult | null;
   showRetryWarning: boolean;
-  openAddModal: (data?: PrinterCreate) => void;
+  existingSerials: string[];
+  openAddModal: (existingSerials: string[]) => void;
   closeAddModal: () => void;
   setRetryData: (data: PrinterCreate) => void;
   setRetryActive: (active: boolean) => void;
@@ -33,6 +34,7 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
   const [isRetryActive, setIsRetryActive] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<PrinterDiagnosticResult | null>(null);
   const [showRetryWarning, setShowRetryWarning] = useState(false);
+  const [existingSerials, setExistingSerials] = useState<string[]>([]);
 
   const addMutation = useMutation({
     mutationFn: api.createPrinter,
@@ -118,21 +120,17 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
     addMutation.mutate(data);
   }, [addMutation]);
 
-  const openAddModal = useCallback((data?: PrinterCreate) => {
+  const openAddModal = useCallback((existingSerials: string[]) => {
+    setExistingSerials(existingSerials);
     setShowAddModal(true);
-    if (data) {
-      setRetryAddData(data);
-      setIsRetryActive(true);
-      setShowRetryWarning(true);
-    } else {
-      setRetryAddData(null);
-      setIsRetryActive(false);
-      setShowRetryWarning(false);
-    }
+    setRetryAddData(null);
+    setIsRetryActive(false);
+    setShowRetryWarning(false);
   }, []);
 
   const closeAddModal = useCallback(() => {
     setShowAddModal(false);
+    setExistingSerials([]);
     if (!isRetryActive) {
       setRetryAddData(null);
       setDiagnosticResult(null);
@@ -161,6 +159,7 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
         isRetryActive,
         diagnosticResult,
         showRetryWarning,
+        existingSerials,
         openAddModal,
         closeAddModal,
         setRetryData,
