@@ -33,6 +33,7 @@ import { useStreamTokenSync } from './hooks/useCameraStreamToken';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { SliceJobTrackerProvider } from './contexts/SliceJobTrackerContext';
+import { AddPrinterProvider } from './contexts/AddPrinterContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ColorCatalogProvider } from './contexts/ColorCatalogContext';
 import { SpoolBuddyLayout } from './components/spoolbuddy/SpoolBuddyLayout';
@@ -172,6 +173,7 @@ function App() {
             <ThemeProvider>
             <ColorCatalogProvider>
             <SliceJobTrackerProvider>
+            <AddPrinterProvider>
             <StreamTokenSync />
             <BrowserRouter>
               <Routes>
@@ -235,6 +237,7 @@ function App() {
                 </Route>
               </Routes>
             </BrowserRouter>
+            </AddPrinterProvider>
             </SliceJobTrackerProvider>
             </ColorCatalogProvider>
             </ThemeProvider>

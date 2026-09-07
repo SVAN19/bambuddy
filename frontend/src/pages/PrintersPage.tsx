@@ -170,6 +170,7 @@ import { LinkSpoolModal } from '../components/LinkSpoolModal';
 import { AssignSpoolModal } from '../components/AssignSpoolModal';
 import { ConfigureAmsSlotModal } from '../components/ConfigureAmsSlotModal';
 import { useToast } from '../contexts/ToastContext';
+import { useAddPrinter } from '../contexts/AddPrinterContext';
 import { ChamberLight } from '../components/icons/ChamberLight';
 import { PlateClearedIcon } from '../components/icons/PlateClearedIcon';
 import { SkipObjectsModal, SkipObjectsIcon } from '../components/SkipObjectsModal';
@@ -8205,7 +8206,6 @@ export function PrintersPage() {
     purple: 'bg-purple-500 text-white hover:bg-purple-400 border-purple-400/60',
     red: 'bg-red-500 text-white hover:bg-red-400 border-red-400/60',
   }[activeAccent];
-  const [showAddModal, setShowAddModal] = useState(false);
   const [hideDisconnected, setHideDisconnected] = useState(() => {
     return localStorage.getItem('hideDisconnectedPrinters') === 'true';
   });
@@ -8298,6 +8298,7 @@ export function PrintersPage() {
   });
   const queryClient = useQueryClient();
   const { showToast, showPersistentToast, dismissToast } = useToast();
+  const { showAddModal, retryAddData, isRetryActive, diagnosticResult, showRetryWarning, openAddModal, closeAddModal, setRetryData, setRetryActive, setDiagnosticResult, setRetryWarning } = useAddPrinter();
   const { hasPermission } = useAuth();
   // Which way the camera buttons open a stream. Chosen per click from the
   // button's own menu; null until this browser has made a choice, so the
@@ -8533,7 +8534,7 @@ export function PrintersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['printers'] });
       queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
-      setShowAddModal(false);
+      closeAddModal();
     },
     onError: (error: Error) => {
       // Localized message when the backend returns a stable error code;
@@ -8547,10 +8548,6 @@ export function PrintersPage() {
   });
 
   // Async add printer with toast notifications (non-blocking UI)
-  const [retryAddData, setRetryAddData] = useState<PrinterCreate | null>(null);
-  const [isRetryActive, setIsRetryActive] = useState(false);
-  const [diagnosticResult, setDiagnosticResult] = useState<PrinterDiagnosticResult | null>(null);
-  const [showRetryWarning, setShowRetryWarning] = useState(false);
   const asyncAddPrinter = useCallback(async (data: PrinterCreate) => {
     // Step 1: Show "checking connection" toast (persistent, no auto-dismiss)
     showPersistentToast('add-printer-checking', t('printers.toast.checkingConnection'), 'loading');
@@ -8571,15 +8568,15 @@ export function PrintersPage() {
         // Dismiss checking toast
         dismissToast('add-printer-checking');
         // Show error toast with retry option
-        setRetryAddData(data);
+        setRetryData(data);
         showPersistentToast('add-printer-error', t('printers.toast.connectionWarning'), 'warning', {
           actions: [
             {
               label: t('printers.toast.retry'),
               onClick: () => {
-                setIsRetryActive(true);
-                setShowAddModal(true);
-                setShowRetryWarning(true);
+                setRetryActive(true);
+                openAddModal();
+                setRetryWarning(true);
               },
             },
             {
@@ -8607,14 +8604,14 @@ export function PrintersPage() {
       dismissToast('add-printer-checking');
 
       // Show error toast with retry option
-      setRetryAddData(data);
+      setRetryData(data);
       showPersistentToast('add-printer-error', t('printers.toast.connectionWarning'), 'warning', {
         actions: [
           {
             label: t('printers.toast.retry'),
             onClick: () => {
-              setIsRetryActive(true);
-              setShowAddModal(true);
+              setRetryActive(true);
+              openAddModal();
             },
           },
           {
@@ -8625,7 +8622,7 @@ export function PrintersPage() {
         ],
       });
     }
-  }, [showToast, showPersistentToast, dismissToast, t, addMutation]);
+  }, [showToast, showPersistentToast, dismissToast, t, addMutation, openAddModal, setRetryData, setRetryActive, setDiagnosticResult, setRetryWarning]);
 
   const powerOnMutation = useMutation({
     mutationFn: (plugId: number) => api.controlSmartPlug(plugId, 'on'),
@@ -9274,7 +9271,7 @@ export function PrintersPage() {
         </div>
       )}
       <Button
-        onClick={() => setShowAddModal(true)}
+        onClick={() => openAddModal()}
         disabled={!hasPermission('printers:create')}
         title={!hasPermission('printers:create') ? t('printers.permission.noAdd') : undefined}
         className={`!h-8 !min-h-8 px-2 py-0 ${inMenu ? 'w-full' : ''}`}
@@ -9361,7 +9358,7 @@ export function PrintersPage() {
           <CardContent className="text-center py-12">
             <p className="text-bambu-gray mb-4">{t('printers.noPrintersConfigured')}</p>
             <Button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => openAddModal()}
               disabled={!hasPermission('printers:create')}
               title={!hasPermission('printers:create') ? t('printers.permission.noAdd') : undefined}
             >
@@ -9570,22 +9567,13 @@ export function PrintersPage() {
 
       {showAddModal && (
         <AddPrinterModal
-          onClose={() => {
-            setShowAddModal(false);
-            // Clear retry data when user closes the modal
-            if (!isRetryActive) {
-              setRetryAddData(null);
-              setDiagnosticResult(null);
-            } else {
-              setIsRetryActive(false);
-            }
-          }}
+          onClose={closeAddModal}
           onAdd={(data) => addMutation.mutate(data)}
           onAsyncAdd={asyncAddPrinter}
           existingSerials={printers?.map(p => p.serial_number) || []}
           initialFormData={isRetryActive ? (retryAddData || undefined) : undefined}
           diagnosticResult={isRetryActive ? diagnosticResult : null}
-          showRetryWarning={isRetryActive}
+          showRetryWarning={showRetryWarning}
           key={isRetryActive ? 'retry' : 'new'}
         />
       )}
