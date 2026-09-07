@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Search, Loader2, ChevronDown, AlertTriangle, Stethoscope, Printer, Wifi, Key, Hash, Globe, FolderPlus, CheckCircle2 } from 'lucide-react';
 import { api, discoveryApi } from '../api/client';
 import type { PrinterCreate, DiscoveredPrinter, PrinterDiagnosticResult } from '../api/client';
+import { getCachedPrinterLocations, addCachedPrinterLocation } from '../utils/printerLocationsCache';
 import { Card, CardContent } from './Card';
 import { Button } from './Button';
 import { ConfirmModal } from './ConfirmModal';
@@ -85,6 +86,7 @@ export function AddPrinterModal({
   useEffect(() => {
     if (initialFormData) {
       setForm(initialFormData);
+      setLocationInput(initialFormData.location || '');
       // Switch to manual tab when retrying with data
       setActiveTab('manual');
     }
@@ -94,6 +96,21 @@ export function AddPrinterModal({
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRetryWarning, setShowRetryWarning] = useState(showRetryWarningProp || false);
+  const [locationInput, setLocationInput] = useState('');
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+  const cachedLocations = getCachedPrinterLocations();
+
+  // Sync locationInput with form.location when form changes externally
+  useEffect(() => {
+    setLocationInput(form.location || '');
+  }, [form.location]);
+
+  // Save location to cache when form is submitted
+  const saveLocationToCache = useCallback(() => {
+    if (form.location && form.location.trim()) {
+      addCachedPrinterLocation(form.location);
+    }
+  }, [form.location]);
 
   // Sync showRetryWarning prop with state
   useEffect(() => {
@@ -195,6 +212,9 @@ export function AddPrinterModal({
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    
+    // Save location to cache before submitting
+    saveLocationToCache();
     
     if (onAsyncAdd) {
       // Async mode: show countdown then close, parent handles async flow with toasts
@@ -690,13 +710,28 @@ export function AddPrinterModal({
                 </div>
                 <div>
                   <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.modal.locationGroup')}</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
-                    value={form.location || ''}
-                    onChange={(e) => handleFormChange({ ...form, location: e.target.value })}
-                    placeholder={t('printers.modal.locationPlaceholder')}
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
+                      value={locationInput}
+                      onChange={(e) => {
+                        setLocationInput(e.target.value);
+                        handleFormChange({ ...form, location: e.target.value });
+                      }}
+                      onFocus={() => setShowLocationSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)}
+                      placeholder={t('printers.modal.locationPlaceholder')}
+                      list="printer-locations"
+                    />
+                    <datalist id="printer-locations">
+                      {cachedLocations
+                        .filter(loc => loc.toLowerCase().includes(locationInput.toLowerCase()))
+                        .map(loc => (
+                          <option key={loc} value={loc} />
+                        ))}
+                    </datalist>
+                  </div>
                   <p className="text-xs text-bambu-gray mt-1.5">{t('printers.locationHelp')}</p>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-bambu-dark/50 rounded-lg border border-bambu-dark-tertiary">
