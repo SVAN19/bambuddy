@@ -8298,7 +8298,7 @@ export function PrintersPage() {
   });
   const queryClient = useQueryClient();
   const { showToast, showPersistentToast, dismissToast } = useToast();
-  const { showAddModal, retryAddData, isRetryActive, diagnosticResult, showRetryWarning, openAddModal, closeAddModal, setRetryData, setRetryActive, setDiagnosticResult, setRetryWarning } = useAddPrinter();
+  const { showAddModal, retryAddData, isRetryActive, diagnosticResult, showRetryWarning, openAddModal, closeAddModal, setRetryData, setRetryActive, setDiagnosticResult, setRetryWarning, addPrinter, asyncAddPrinter } = useAddPrinter();
   const { hasPermission } = useAuth();
   // Which way the camera buttons open a stream. Chosen per click from the
   // button's own menu; null until this browser has made a choice, so the
@@ -8528,101 +8528,6 @@ export function PrintersPage() {
     },
     {} as Record<number, typeof smartPlugs[0]>
   ) || {};
-
-  const addMutation = useMutation({
-    mutationFn: api.createPrinter,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['printers'] });
-      queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
-      closeAddModal();
-    },
-    onError: (error: Error) => {
-      // Localized message when the backend returns a stable error code;
-      // the raw message is an English fallback for non-UI clients.
-      if (error instanceof ApiError && error.code === 'printer_connection_failed') {
-        showToast(t('printers.toast.connectionFailedNotAdded'), 'error');
-        return;
-      }
-      showToast(error.message || t('printers.toast.failedToAdd'), 'error');
-    },
-  });
-
-  // Async add printer with toast notifications (non-blocking UI)
-  const asyncAddPrinter = useCallback(async (data: PrinterCreate) => {
-    // Step 1: Show "checking connection" toast (persistent, no auto-dismiss)
-    showPersistentToast('add-printer-checking', t('printers.toast.checkingConnection'), 'loading');
-
-    try {
-      // Step 2: Run diagnostic
-      const result = await api.diagnoseConnection({
-        ip_address: data.ip_address.trim(),
-        serial_number: data.serial_number.trim() || undefined,
-        access_code: data.access_code || undefined,
-      });
-
-      // Check for failures
-      const hasFailures = result.checks.some((c) => c.status === 'fail');
-      if (hasFailures) {
-        // Save diagnostic result for showing on retry
-        setDiagnosticResult(result);
-        // Dismiss checking toast
-        dismissToast('add-printer-checking');
-        // Show error toast with retry option
-        setRetryData(data);
-        showPersistentToast('add-printer-error', t('printers.toast.connectionWarning'), 'warning', {
-          actions: [
-            {
-              label: t('printers.toast.retry'),
-              onClick: () => {
-                setRetryActive(true);
-                openAddModal();
-                setRetryWarning(true);
-              },
-            },
-            {
-              label: t('printers.toast.addAnyway'),
-              disabled: true,
-              tooltip: t('printers.toast.addAnywayDisabled'),
-            },
-          ],
-        });
-        return;
-      }
-
-      // Step 3: Dismiss checking toast and show adding toast
-      dismissToast('add-printer-checking');
-      showPersistentToast('add-printer-adding', t('printers.toast.addingPrinter', { printerName: data.name }), 'loading');
-
-      // Step 4: Create printer
-      await addMutation.mutateAsync(data);
-
-      // Step 5: Show success toast
-      dismissToast('add-printer-adding');
-      showToast(t('printers.toast.printerAddedSuccess', { printerName: data.name }), 'success');
-    } catch (error) {
-      // Dismiss checking toast if still showing
-      dismissToast('add-printer-checking');
-
-      // Show error toast with retry option
-      setRetryData(data);
-      showPersistentToast('add-printer-error', t('printers.toast.connectionWarning'), 'warning', {
-        actions: [
-          {
-            label: t('printers.toast.retry'),
-            onClick: () => {
-              setRetryActive(true);
-              openAddModal();
-            },
-          },
-          {
-            label: t('printers.toast.addAnyway'),
-            disabled: true,
-            tooltip: t('printers.toast.addAnywayDisabled'),
-          },
-        ],
-      });
-    }
-  }, [showToast, showPersistentToast, dismissToast, t, addMutation, openAddModal, setRetryData, setRetryActive, setDiagnosticResult, setRetryWarning]);
 
   const powerOnMutation = useMutation({
     mutationFn: (plugId: number) => api.controlSmartPlug(plugId, 'on'),
@@ -9568,7 +9473,7 @@ export function PrintersPage() {
       {showAddModal && (
         <AddPrinterModal
           onClose={closeAddModal}
-          onAdd={(data) => addMutation.mutate(data)}
+          onAdd={addPrinter}
           onAsyncAdd={asyncAddPrinter}
           existingSerials={printers?.map(p => p.serial_number) || []}
           initialFormData={isRetryActive ? (retryAddData || undefined) : undefined}

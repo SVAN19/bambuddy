@@ -1,5 +1,9 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { api, ApiError } from '../api/client';
 import type { PrinterCreate, PrinterDiagnosticResult } from '../api/client';
+import { useToast } from './ToastContext';
 
 interface AddPrinterContextType {
   showAddModal: boolean;
@@ -13,16 +17,106 @@ interface AddPrinterContextType {
   setRetryActive: (active: boolean) => void;
   setDiagnosticResult: (result: PrinterDiagnosticResult | null) => void;
   setRetryWarning: (show: boolean) => void;
+  addPrinter: (data: PrinterCreate) => void;
+  asyncAddPrinter: (data: PrinterCreate) => Promise<void>;
 }
 
 const AddPrinterContext = createContext<AddPrinterContextType | undefined>(undefined);
 
 export function AddPrinterProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { showToast, showPersistentToast, dismissToast } = useToast();
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [retryAddData, setRetryAddData] = useState<PrinterCreate | null>(null);
   const [isRetryActive, setIsRetryActive] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<PrinterDiagnosticResult | null>(null);
   const [showRetryWarning, setShowRetryWarning] = useState(false);
+
+  const addMutation = useMutation({
+    mutationFn: api.createPrinter,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['printers'] });
+      queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
+      setShowAddModal(false);
+    },
+    onError: (error: Error) => {
+      if (error instanceof ApiError && error.code === 'printer_connection_failed') {
+        showToast(t('printers.toast.connectionFailedNotAdded'), 'error');
+        return;
+      }
+      showToast(error.message || t('printers.toast.failedToAdd'), 'error');
+    },
+  });
+
+  const asyncAddPrinter = useCallback(async (data: PrinterCreate) => {
+    showPersistentToast('add-printer-checking', t('printers.toast.checkingConnection'), 'loading');
+
+    try {
+      const result = await api.diagnoseConnection({
+        ip_address: data.ip_address.trim(),
+        serial_number: data.serial_number.trim() || undefined,
+        access_code: data.access_code || undefined,
+      });
+
+      const hasFailures = result.checks.some((c) => c.status === 'fail');
+      if (hasFailures) {
+        setDiagnosticResult(result);
+        dismissToast('add-printer-checking');
+        setRetryData(data);
+        showPersistentToast('add-printer-error', t('printers.toast.connectionWarning'), 'warning', {
+          actions: [
+            {
+              label: t('printers.toast.retry'),
+              onClick: () => {
+                setRetryActive(true);
+                openAddModal();
+                setRetryWarning(true);
+              },
+            },
+            {
+              label: t('printers.toast.addAnyway'),
+              disabled: true,
+              tooltip: t('printers.toast.addAnywayDisabled'),
+            },
+          ],
+        });
+        return;
+      }
+
+      dismissToast('add-printer-checking');
+      showPersistentToast('add-printer-adding', t('printers.toast.addingPrinter', { printerName: data.name }), 'loading');
+
+      await addMutation.mutateAsync(data);
+
+      dismissToast('add-printer-adding');
+      showToast(t('printers.toast.printerAddedSuccess', { printerName: data.name }), 'success');
+    } catch (error) {
+      dismissToast('add-printer-checking');
+      setRetryData(data);
+      showPersistentToast('add-printer-error', t('printers.toast.connectionWarning'), 'warning', {
+        actions: [
+          {
+            label: t('printers.toast.retry'),
+            onClick: () => {
+              setRetryActive(true);
+              openAddModal();
+            },
+          },
+          {
+            label: t('printers.toast.addAnyway'),
+            disabled: true,
+            tooltip: t('printers.toast.addAnywayDisabled'),
+          },
+        ],
+      });
+    }
+  }, [showToast, showPersistentToast, dismissToast, t, addMutation]);
+
+  const addPrinter = useCallback((data: PrinterCreate) => {
+    addMutation.mutate(data);
+  }, [addMutation]);
 
   const openAddModal = useCallback((data?: PrinterCreate) => {
     setShowAddModal(true);
@@ -73,6 +167,8 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
         setRetryActive,
         setDiagnosticResult,
         setRetryWarning,
+        addPrinter,
+        asyncAddPrinter,
       }}
     >
       {children}
