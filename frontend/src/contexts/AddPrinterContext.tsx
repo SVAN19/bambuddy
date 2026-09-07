@@ -12,7 +12,7 @@ interface AddPrinterContextType {
   diagnosticResult: PrinterDiagnosticResult | null;
   showRetryWarning: boolean;
   existingSerials: string[];
-  openAddModal: (existingSerials: string[]) => void;
+  openAddModal: (existingSerials: string[], initialData?: PrinterCreate) => void;
   closeAddModal: () => void;
   setRetryData: (data: PrinterCreate) => void;
   setRetryActive: (active: boolean) => void;
@@ -66,15 +66,12 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
       if (hasFailures) {
         setDiagnosticResult(result);
         dismissToast('add-printer-checking');
-        setRetryData(data);
         showPersistentToast('add-printer-error', t('printers.toast.connectionWarning'), 'warning', {
           actions: [
             {
               label: t('printers.toast.retry'),
               onClick: () => {
-                setRetryActive(true);
-                openAddModal(existingSerials);
-                setRetryWarning(true);
+                openAddModal(existingSerials, data);
               },
             },
             {
@@ -96,14 +93,12 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
       showToast(t('printers.toast.printerAddedSuccess', { printerName: data.name }), 'success');
     } catch (error) {
       dismissToast('add-printer-checking');
-      setRetryData(data);
       showPersistentToast('add-printer-error', t('printers.toast.connectionWarning'), 'warning', {
         actions: [
           {
             label: t('printers.toast.retry'),
             onClick: () => {
-              setRetryActive(true);
-              openAddModal(existingSerials);
+              openAddModal(existingSerials, data);
             },
           },
           {
@@ -120,12 +115,18 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
     addMutation.mutate(data);
   }, [addMutation]);
 
-  const openAddModal = useCallback((existingSerials: string[]) => {
+  const openAddModal = useCallback((existingSerials: string[], initialData?: PrinterCreate) => {
     setExistingSerials(existingSerials);
     setShowAddModal(true);
-    setRetryAddData(null);
-    setIsRetryActive(false);
-    setShowRetryWarning(false);
+    if (initialData) {
+      setRetryAddData(initialData);
+      setIsRetryActive(true);
+      setShowRetryWarning(true);
+    } else {
+      setRetryAddData(null);
+      setIsRetryActive(false);
+      setShowRetryWarning(false);
+    }
   }, []);
 
   const closeAddModal = useCallback(() => {
