@@ -8298,7 +8298,7 @@ export function PrintersPage() {
   });
   const queryClient = useQueryClient();
   const { showToast, showPersistentToast, dismissToast } = useToast();
-  const { showAddModal, retryAddData, isRetryActive, diagnosticResult, showRetryWarning, openAddModal, closeAddModal, setRetryData, setRetryActive, setDiagnosticResult, setRetryWarning, addPrinter, asyncAddPrinter } = useAddPrinter();
+  const { showAddModal, retryAddData, isRetryActive, diagnosticResult, showRetryWarning, existingSerials, openAddModal, closeAddModal, setRetryData, setRetryActive, setDiagnosticResult, setRetryWarning, addPrinter, asyncAddPrinter } = useAddPrinter();
   const { hasPermission } = useAuth();
   // Which way the camera buttons open a stream. Chosen per click from the
   // button's own menu; null until this browser has made a choice, so the
