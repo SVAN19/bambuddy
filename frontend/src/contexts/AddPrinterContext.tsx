@@ -73,7 +73,7 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
               label: t('printers.toast.retry'),
               onClick: () => {
                 setRetryActive(true);
-                openAddModal();
+                openAddModal(existingSerials);
                 setRetryWarning(true);
               },
             },
@@ -103,7 +103,7 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
             label: t('printers.toast.retry'),
             onClick: () => {
               setRetryActive(true);
-              openAddModal();
+              openAddModal(existingSerials);
             },
           },
           {
@@ -114,7 +114,7 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
         ],
       });
     }
-  }, [showToast, showPersistentToast, dismissToast, t, addMutation]);
+  }, [showToast, showPersistentToast, dismissToast, t, addMutation, existingSerials]);
 
   const addPrinter = useCallback((data: PrinterCreate) => {
     addMutation.mutate(data);
