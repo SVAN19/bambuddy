@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Loader2, ChevronDown, AlertTriangle, Stethoscope, Printer, Wifi, Key, Hash, Globe, FolderPlus, CheckCircle2, MapPin } from 'lucide-react';
+import { Search, Loader2, ChevronDown, AlertTriangle, Stethoscope, Printer, Wifi, Key, Hash, Globe, FolderPlus, CheckCircle2, MapPin, Home, Wrench, Coffee, Briefcase, Building2, Car, Heart, BookOpen, Dumbbell, Music, Gamepad2, Leaf, Palette, Monitor, Utensils, ShoppingBag, Gift, Star, Crown, Shield, Zap, Sun, Moon, Cloud, Snowflake, Flame, Anchor, Plane, Train, Bike, Truck } from 'lucide-react';
 import { api, discoveryApi } from '../api/client';
 import type { PrinterCreate, DiscoveredPrinter, PrinterDiagnosticResult } from '../api/client';
 import { getCachedPrinterLocations, addCachedPrinterLocation } from '../utils/printerLocationsCache';
+import { getLocationIcon } from '../utils/printerLocationIcons';
+import { getLocationColor } from '../utils/printerLocationColors';
 import { Card, CardContent } from './Card';
 import { Button } from './Button';
 import { ConfirmModal } from './ConfirmModal';
@@ -104,6 +106,56 @@ export function AddPrinterModal({
   const filteredLocations = cachedLocations.filter((loc) =>
     loc.toLowerCase().includes(locationInput.toLowerCase())
   );
+
+  // Get icon component for a location
+  const getLocationIconComponent = useCallback((locationName: string) => {
+    const iconName = getLocationIcon(locationName);
+    if (!iconName) return null;
+    
+    // Map common icon names to lucide-react components
+    const iconMap: Record<string, any> = {
+      'home': Home,
+      'wrench': Wrench,
+      'coffee': Coffee,
+      'briefcase': Briefcase,
+      'building': Building2,
+      'car': Car,
+      'heart': Heart,
+      'book': BookOpen,
+      'dumbbell': Dumbbell,
+      'music': Music,
+      'gamepad': Gamepad2,
+      'leaf': Leaf,
+      'palette': Palette,
+      'monitor': Monitor,
+      'utensils': Utensils,
+      'shopping': ShoppingBag,
+      'gift': Gift,
+      'star': Star,
+      'crown': Crown,
+      'shield': Shield,
+      'zap': Zap,
+      'sun': Sun,
+      'moon': Moon,
+      'cloud': Cloud,
+      'snowflake': Snowflake,
+      'flame': Flame,
+      'anchor': Anchor,
+      'plane': Plane,
+      'train': Train,
+      'bike': Bike,
+      'truck': Truck,
+      'box': FolderPlus,
+    };
+    
+    const IconComponent = iconMap[iconName.toLowerCase()];
+    return IconComponent || FolderPlus;
+  }, []);
+
+  // Get color for a location
+  const getLocationColorValue = useCallback((locationName: string) => {
+    return getLocationColor(locationName);
+  }, []);
 
   // Sync locationInput with form.location when form changes externally
   useEffect(() => {
@@ -748,21 +800,42 @@ export function AddPrinterModal({
                     </div>
                     {showLocationSuggestions && filteredLocations.length > 0 && (
                       <div className="absolute z-50 mt-1 w-full bg-bambu-dark border border-bambu-dark-tertiary rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                        {filteredLocations.map((loc) => (
-                          <button
-                            key={loc}
-                            type="button"
-                            className="w-full px-3 py-2 text-left text-sm text-white hover:bg-bambu-dark-tertiary transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
-                            onClick={() => {
-                              setLocationInput(loc);
-                              handleFormChange({ ...form, location: loc });
-                              setShowLocationSuggestions(false);
-                            }}
-                          >
-                            <MapPin className="w-3.5 h-3.5 text-bambu-gray/60 flex-shrink-0" />
-                            <span className="truncate">{loc}</span>
-                          </button>
-                        ))}
+                        {filteredLocations.map((loc) => {
+                          const IconComponent = getLocationIconComponent(loc);
+                          const color = getLocationColorValue(loc);
+                          return (
+                            <button
+                              key={loc}
+                              type="button"
+                              className="w-full px-3 py-2 text-left text-sm text-white hover:bg-bambu-dark-tertiary transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                              onClick={() => {
+                                setLocationInput(loc);
+                                handleFormChange({ ...form, location: loc });
+                                setShowLocationSuggestions(false);
+                              }}
+                            >
+                              {IconComponent && (
+                                <div
+                                  className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                                  style={{ backgroundColor: color ? color + '20' : undefined, border: color ? `1px solid ${color}40` : undefined }}
+                                >
+                                  <IconComponent
+                                    className="w-3.5 h-3.5"
+                                    style={{ color: color || undefined }}
+                                  />
+                                </div>
+                              )}
+                              {!IconComponent && (
+                                <div
+                                  className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 bg-bambu-dark-tertiary"
+                                >
+                                  <MapPin className="w-3.5 h-3.5 text-bambu-gray/60" />
+                                </div>
+                              )}
+                              <span className="truncate">{loc}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
