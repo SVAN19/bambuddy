@@ -16,6 +16,7 @@ import { useUnknownTagPrompt } from '../hooks/useUnknownTagPrompt';
 import { UnknownSpoolModal } from './UnknownSpoolModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { AddPrinterPortal } from './AddPrinterPortal';
 import { Card, CardHeader, CardContent } from './Card';
 import { parseUTCDate } from '../utils/date';
 import { Button } from './Button';
@@ -1167,6 +1168,9 @@ export function Layout() {
         onOpenChange={setBugReportOpen}
         onLoggingChange={setBugReportLogging}
       />
+
+      {/* Global add printer modal — available on all pages within Layout */}
+      <AddPrinterPortal />
     </div>
   );
 }

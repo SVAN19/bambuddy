@@ -149,7 +149,7 @@ import type { Printer, PrinterCreate, PrinterStatus, AMSUnit, FirmwareUpdateInfo
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { AddPrinterModal } from '../components/AddPrinterModal';
+import { AddPrinterModal } from '../components/AddPrinterPortal';
 import { BulkPrinterToolbar, type PrinterState } from '../components/BulkPrinterToolbar';
 import { FileManagerModal } from '../components/FileManagerModal';
 import { EmbeddedCameraViewer } from '../components/EmbeddedCameraViewer';
@@ -9470,18 +9470,7 @@ export function PrintersPage() {
         </button>
       )}
 
-      {showAddModal && (
-        <AddPrinterModal
-          onClose={closeAddModal}
-          onAdd={addPrinter}
-          onAsyncAdd={asyncAddPrinter}
-          existingSerials={existingSerials}
-          initialFormData={isRetryActive ? (retryAddData || undefined) : undefined}
-          diagnosticResult={isRetryActive ? diagnosticResult : null}
-          showRetryWarning={showRetryWarning}
-          key={isRetryActive ? 'retry' : 'new'}
-        />
-      )}
+
 
       {/* Bulk selection toolbar */}
       {selectionMode && printers && (
