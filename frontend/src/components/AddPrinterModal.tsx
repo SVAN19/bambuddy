@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Loader2, ChevronDown, AlertTriangle, Stethoscope, Printer, Wifi, Key, Hash, Globe, FolderPlus, CheckCircle2 } from 'lucide-react';
+import { Search, Loader2, ChevronDown, AlertTriangle, Stethoscope, Printer, Wifi, Key, Hash, Globe, FolderPlus, CheckCircle2, MapPin } from 'lucide-react';
 import { api, discoveryApi } from '../api/client';
 import type { PrinterCreate, DiscoveredPrinter, PrinterDiagnosticResult } from '../api/client';
 import { getCachedPrinterLocations, addCachedPrinterLocation } from '../utils/printerLocationsCache';
@@ -100,6 +100,11 @@ export function AddPrinterModal({
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const cachedLocations = getCachedPrinterLocations();
 
+  // Filter locations based on input
+  const filteredLocations = cachedLocations.filter((loc) =>
+    loc.toLowerCase().includes(locationInput.toLowerCase())
+  );
+
   // Sync locationInput with form.location when form changes externally
   useEffect(() => {
     setLocationInput(form.location || '');
@@ -111,6 +116,18 @@ export function AddPrinterModal({
       addCachedPrinterLocation(form.location);
     }
   }, [form.location]);
+
+  // Close suggestions when clicking outside
+  const locationRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (locationRef.current && !locationRef.current.contains(event.target as Node)) {
+        setShowLocationSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Sync showRetryWarning prop with state
   useEffect(() => {
@@ -710,27 +727,44 @@ export function AddPrinterModal({
                 </div>
                 <div>
                   <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.modal.locationGroup')}</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
-                      value={locationInput}
-                      onChange={(e) => {
-                        setLocationInput(e.target.value);
-                        handleFormChange({ ...form, location: e.target.value });
-                      }}
-                      onFocus={() => setShowLocationSuggestions(true)}
-                      onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)}
-                      placeholder={t('printers.modal.locationPlaceholder')}
-                      list="printer-locations"
-                    />
-                    <datalist id="printer-locations">
-                      {cachedLocations
-                        .filter(loc => loc.toLowerCase().includes(locationInput.toLowerCase()))
-                        .map(loc => (
-                          <option key={loc} value={loc} />
+                  <div ref={locationRef} className="relative">
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray/40" />
+                      <input
+                        type="text"
+                        className="w-full pl-10 pr-10 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
+                        value={locationInput}
+                        onChange={(e) => {
+                          setLocationInput(e.target.value);
+                          handleFormChange({ ...form, location: e.target.value });
+                        }}
+                        onFocus={() => setShowLocationSuggestions(true)}
+                        placeholder={t('printers.modal.locationPlaceholder')}
+                        autoComplete="off"
+                      />
+                      {cachedLocations.length > 0 && (
+                        <ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray/40 transition-transform ${showLocationSuggestions ? 'rotate-180' : ''}`} />
+                      )}
+                    </div>
+                    {showLocationSuggestions && filteredLocations.length > 0 && (
+                      <div className="absolute z-50 mt-1 w-full bg-bambu-dark border border-bambu-dark-tertiary rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        {filteredLocations.map((loc) => (
+                          <button
+                            key={loc}
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-sm text-white hover:bg-bambu-dark-tertiary transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                            onClick={() => {
+                              setLocationInput(loc);
+                              handleFormChange({ ...form, location: loc });
+                              setShowLocationSuggestions(false);
+                            }}
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-bambu-gray/60 flex-shrink-0" />
+                            <span className="truncate">{loc}</span>
+                          </button>
                         ))}
-                    </datalist>
+                      </div>
+                    )}
                   </div>
                   <p className="text-xs text-bambu-gray mt-1.5">{t('printers.locationHelp')}</p>
                 </div>
