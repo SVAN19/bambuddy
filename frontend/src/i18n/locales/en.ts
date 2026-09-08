@@ -482,8 +482,8 @@ export default {
       connectionFailedNotAdded: 'Could not connect to the printer. Verify the IP, serial number, and access code, and confirm LAN-only mode is on. The printer was not added.',
       connectionWarning: 'Connection check failed, but you can still add the printer. It may show as offline initially.',
       retry: 'Retry',
-      addAnyway: 'Add anyway (Coming soon)',
-      addAnywayDisabled: 'Force add without diagnostic check - coming soon',
+      addAnyway: 'Add anyway',
+      addAnywayDisabled: 'Force add without diagnostic check',
       lastConnectionFailed: 'Last connection attempt failed. The printer may be offline or the entered data (access code or serial number) may be incorrect. Check the data or click RUN DIAGNOSTIC to get more information about the connection error.',
       dataReceived: 'Data received — printer will be added after verification',
       closingIn: 'Closing in {{seconds}}s...',
@@ -520,6 +520,18 @@ export default {
       unloadInitiated: 'Unloading filament…',
       failedToLoad: 'Failed to load filament',
       failedToUnload: 'Failed to unload filament',
+      // Force add warning modal
+      forceAddWarning: {
+        title: 'Add printer without connection check',
+        description: 'This printer failed the connection diagnostic. Possible reasons:',
+        reasonOffline: 'Printer is offline and not responding',
+        reasonInvalidData: 'Invalid data entered: IP address, serial number, or access code',
+        reasonNotLANMode: 'Printer is not in LAN mode',
+        warning: 'After adding, the printer will be marked as UNAVAILABLE and you will not be able to interact with it until you correct the settings.',
+        confirmation: 'I understand that I am adding a printer that may not connect',
+        cancel: 'Cancel',
+        add: 'Add anyway',
+      },
     },
     // Connection status
     connection: {

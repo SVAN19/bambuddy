@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useAddPrinter } from '../contexts/AddPrinterContext';
 import { AddPrinterModal } from './AddPrinterModal';
+import { ForceAddWarningModal } from './ForceAddWarningModal';
 
 /**
  * Renders AddPrinterModal as a portal to document.body.
@@ -14,8 +15,11 @@ export function AddPrinterPortal() {
     isRetryActive,
     diagnosticResult,
     showRetryWarning,
+    showForceAddModal,
+    forceAddData,
     existingSerials,
     closeAddModal,
+    closeForceAddModal,
     addPrinter,
     asyncAddPrinter,
   } = useAddPrinter();
@@ -35,5 +39,30 @@ export function AddPrinterPortal() {
     />
   );
 
-  return createPortal(modal, document.body);
+  return createPortal(
+    <>
+      {showAddModal && (
+        <AddPrinterModal
+          onClose={closeAddModal}
+          onAdd={addPrinter}
+          onAsyncAdd={asyncAddPrinter}
+          existingSerials={existingSerials}
+          initialFormData={isRetryActive ? (retryAddData || undefined) : undefined}
+          diagnosticResult={isRetryActive ? diagnosticResult : null}
+          showRetryWarning={showRetryWarning}
+          key={isRetryActive ? 'retry' : 'new'}
+        />
+      )}
+      {showForceAddModal && forceAddData && (
+        <ForceAddWarningModal
+          onClose={closeForceAddModal}
+          onConfirm={() => {
+            addPrinter(forceAddData);
+            closeForceAddModal();
+          }}
+        />
+      )}
+    </>,
+    document.body
+  );
 }

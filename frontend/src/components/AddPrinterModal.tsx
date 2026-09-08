@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Loader2, ChevronDown, AlertTriangle, Stethoscope, Printer, Wifi, Key, Hash, Globe, FolderPlus, CheckCircle2, MapPin, Home, Wrench, Coffee, Briefcase, Building2, Car, Heart, BookOpen, Dumbbell, Music, Gamepad2, Leaf, Palette, Monitor, Utensils, ShoppingBag, Gift, Star, Crown, Shield, Zap, Sun, Moon, Cloud, Snowflake, Flame, Anchor, Plane, Train, Bike, Truck } from 'lucide-react';
+import { Search, Loader2, ChevronDown, AlertTriangle, Stethoscope, Printer, Wifi, Key, Hash, Globe, FolderPlus, CheckCircle2, MapPin, Zap } from 'lucide-react';
 import { api, discoveryApi } from '../api/client';
 import type { PrinterCreate, DiscoveredPrinter, PrinterDiagnosticResult } from '../api/client';
 import { getCachedPrinterLocations, addCachedPrinterLocation } from '../utils/printerLocationsCache';
@@ -203,6 +203,14 @@ export function AddPrinterModal({
   const [hasChanges, setHasChanges] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'discover' | 'manual'>('discover');
+  const [printerType, setPrinterType] = useState<'bambulab' | 'klipper'>('bambulab');
+  const [klipperPort, setKlipperPort] = useState('7125');
+
+  // Printer type-specific fields (prepared for future implementation)
+  // Bambulab: serial_number, access_code, ip_address
+  // Klipper: ip_address, port, username, password (optional)
+  const isBambulab = printerType === 'bambulab';
+
   const hasChangesRef = useRef(false);
 
   // Fetch discovery info on mount + restore the last custom CIDR the user
@@ -618,11 +626,38 @@ export function AddPrinterModal({
           <form onSubmit={handleAddSubmit} className="space-y-4">
             {/* Printer Info Section */}
             <div className="space-y-3">
-              <h3 className="text-sm font-medium text-bambu-gray uppercase tracking-wider flex items-center gap-2">
-                <Printer className="w-4 h-4" />
-                {t('printers.manualAdd.printerInfo')}
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-bambu-gray uppercase tracking-wider flex items-center gap-2">
+                  <Printer className="w-4 h-4" />
+                  {t('printers.manualAdd.printerInfo')}
+                </h3>
+                <div className="flex items-center gap-0.5 p-0.5 bg-bambu-dark rounded-lg border border-bambu-dark-tertiary">
+                  <button
+                    type="button"
+                    onClick={() => setPrinterType('bambulab')}
+                    className={`px-2 py-1 rounded text-[10px] font-semibold transition-all ${
+                      printerType === 'bambulab'
+                        ? 'bg-bambu-green text-white shadow-sm'
+                        : 'text-bambu-gray hover:text-white hover:bg-bambu-dark-tertiary'
+                    }`}
+                  >
+                    BAMBULAB
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrinterType('klipper')}
+                    className={`px-2 py-1 rounded text-[10px] font-semibold transition-all ${
+                      printerType === 'klipper'
+                        ? 'bg-bambu-green text-white shadow-sm'
+                        : 'text-bambu-gray hover:text-white hover:bg-bambu-dark-tertiary'
+                    }`}
+                  >
+                    KLIPPER
+                  </button>
+                </div>
+              </div>
               <div className="grid gap-3">
+                {/* Common field: Printer name */}
                 <div className="relative">
                   <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.name')}</label>
                   <div className="relative">
@@ -637,6 +672,9 @@ export function AddPrinterModal({
                     />
                   </div>
                 </div>
+
+                {/* Bambulab: IP + Serial
+                    Klipper: IP + Port */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="relative">
                     <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.ipAddress')}</label>
@@ -653,35 +691,62 @@ export function AddPrinterModal({
                       />
                     </div>
                   </div>
-                  <div className="relative">
-                    <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.serialNumber')}</label>
+
+                  {/* Bambulab: Serial Number */}
+                  {isBambulab && (
                     <div className="relative">
-                      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray/40" />
+                      <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.serialNumber')}</label>
+                      <div className="relative">
+                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray/40" />
+                        <input
+                          type="text"
+                          required
+                          className="w-full pl-10 pr-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
+                          value={form.serial_number}
+                          onChange={(e) => handleFormChange({ ...form, serial_number: e.target.value })}
+                          placeholder="01P00A000000000"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Klipper: Port */}
+                  {!isBambulab && (
+                    <div className="relative">
+                      <label className="block text-sm text-bambu-gray mb-1.5">Port (Moonraker)</label>
+                      <div className="relative">
+                        <Zap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray/40" />
+                        <input
+                          type="text"
+                          required
+                          className="w-full pl-10 pr-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
+                          value={klipperPort}
+                          onChange={(e) => setKlipperPort(e.target.value)}
+                          placeholder="7125"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bambulab: Access Code
+                    Klipper: (none) */}
+                {isBambulab && (
+                  <div className="relative">
+                    <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.accessCode')}</label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray/40" />
                       <input
-                        type="text"
+                        type="password"
                         required
                         className="w-full pl-10 pr-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
-                        value={form.serial_number}
-                        onChange={(e) => handleFormChange({ ...form, serial_number: e.target.value })}
-                        placeholder="01P00A000000000"
+                        value={form.access_code}
+                        onChange={(e) => handleFormChange({ ...form, access_code: e.target.value })}
+                        placeholder={t('printers.modal.fromPrinterSettings')}
                       />
                     </div>
                   </div>
-                </div>
-                <div className="relative">
-                  <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.accessCode')}</label>
-                  <div className="relative">
-                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bambu-gray/40" />
-                    <input
-                      type="password"
-                      required
-                      className="w-full pl-10 pr-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
-                      value={form.access_code}
-                      onChange={(e) => handleFormChange({ ...form, access_code: e.target.value })}
-                      placeholder={t('printers.modal.fromPrinterSettings')}
-                    />
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -694,39 +759,53 @@ export function AddPrinterModal({
               <div className="grid gap-3">
                 <div>
                   <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.modal.modelOptional')}</label>
-                  <select
-                    className="w-full px-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
-                    value={form.model || ''}
-                    onChange={(e) => handleFormChange({ ...form, model: e.target.value })}
-                  >
-                    <option value="">{t('printers.modal.selectModel')}</option>
-                    <optgroup label="A1 Series">
-                      <option value="A1">A1</option>
-                      <option value="A1 Mini">A1 Mini</option>
-                    </optgroup>
-                    <optgroup label="A2 Series">
-                      <option value="A2L">A2L</option>
-                    </optgroup>
-                    <optgroup label="H2 Series">
-                      <option value="H2C">H2C</option>
-                      <option value="H2D">H2D</option>
-                      <option value="H2D Pro">H2D Pro</option>
-                      <option value="H2S">H2S</option>
-                    </optgroup>
-                    <optgroup label="P Series">
-                      <option value="P1P">P1P</option>
-                      <option value="P1S">P1S</option>
-                      <option value="P2S">P2S</option>
-                    </optgroup>
-                    <optgroup label="X1 Series">
-                      <option value="X1">X1</option>
-                      <option value="X1C">X1 Carbon</option>
-                      <option value="X1E">X1E</option>
-                    </optgroup>
-                    <optgroup label="X2 Series">
-                      <option value="X2D">X2D</option>
-                    </optgroup>
-                  </select>
+                  {isBambulab ? (
+                    <select
+                      className="w-full px-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
+                      value={form.model || ''}
+                      onChange={(e) => handleFormChange({ ...form, model: e.target.value })}
+                    >
+                      <option value="">{t('printers.modal.selectModel')}</option>
+                      <optgroup label="A1 Series">
+                        <option value="A1">A1</option>
+                        <option value="A1 Mini">A1 Mini</option>
+                      </optgroup>
+                      <optgroup label="A2 Series">
+                        <option value="A2L">A2L</option>
+                      </optgroup>
+                      <optgroup label="H2 Series">
+                        <option value="H2C">H2C</option>
+                        <option value="H2D">H2D</option>
+                        <option value="H2D Pro">H2D Pro</option>
+                        <option value="H2S">H2S</option>
+                      </optgroup>
+                      <optgroup label="P Series">
+                        <option value="P1P">P1P</option>
+                        <option value="P1S">P1S</option>
+                        <option value="P2S">P2S</option>
+                      </optgroup>
+                      <optgroup label="X1 Series">
+                        <option value="X1">X1</option>
+                        <option value="X1C">X1 Carbon</option>
+                        <option value="X1E">X1E</option>
+                      </optgroup>
+                      <optgroup label="X2 Series">
+                        <option value="X2D">X2D</option>
+                      </optgroup>
+                    </select>
+                  ) : (
+                    <select
+                      className="w-full px-3 py-2.5 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none transition-colors"
+                      value={form.model || ''}
+                      onChange={(e) => handleFormChange({ ...form, model: e.target.value })}
+                    >
+                      <option value="">{t('printers.modal.selectModel')}</option>
+                      <option value="custom">Custom (Klipper)</option>
+                      <option value="fluidd">Fluidd</option>
+                      <option value="mainsail">Mainsail</option>
+                      <option value="octoprint">OctoPrint</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm text-bambu-gray mb-1.5">{t('printers.modal.locationGroup')}</label>
@@ -865,7 +944,7 @@ export function AddPrinterModal({
                   <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
                     {t('common.cancel')}
                   </Button>
-                  <Button type="submit" disabled={checkingSave} className="flex-1">
+                  <Button type="submit" disabled={checkingSave || !isBambulab} className="flex-1" title={!isBambulab ? 'Coming soon' : undefined}>
                     {checkingSave ? t('printers.addPreflight.checking') : t('printers.addPrinter.label')}
                   </Button>
                 </div>

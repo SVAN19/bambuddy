@@ -149,7 +149,7 @@ import type { Printer, PrinterCreate, PrinterStatus, AMSUnit, FirmwareUpdateInfo
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { AddPrinterModal } from '../components/AddPrinterPortal';
+import { AddPrinterModal } from '../components/AddPrinterModal';
 import { BulkPrinterToolbar, type PrinterState } from '../components/BulkPrinterToolbar';
 import { FileManagerModal } from '../components/FileManagerModal';
 import { EmbeddedCameraViewer } from '../components/EmbeddedCameraViewer';

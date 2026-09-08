@@ -11,6 +11,8 @@ interface AddPrinterContextType {
   isRetryActive: boolean;
   diagnosticResult: PrinterDiagnosticResult | null;
   showRetryWarning: boolean;
+  showForceAddModal: boolean;
+  forceAddData: PrinterCreate | null;
   existingSerials: string[];
   openAddModal: (existingSerials: string[], initialData?: PrinterCreate) => void;
   closeAddModal: () => void;
@@ -18,6 +20,8 @@ interface AddPrinterContextType {
   setRetryActive: (active: boolean) => void;
   setDiagnosticResult: (result: PrinterDiagnosticResult | null) => void;
   setRetryWarning: (show: boolean) => void;
+  openForceAddModal: (data: PrinterCreate) => void;
+  closeForceAddModal: () => void;
   addPrinter: (data: PrinterCreate) => void;
   asyncAddPrinter: (data: PrinterCreate) => Promise<void>;
 }
@@ -34,6 +38,8 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
   const [isRetryActive, setIsRetryActive] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<PrinterDiagnosticResult | null>(null);
   const [showRetryWarning, setShowRetryWarning] = useState(false);
+  const [showForceAddModal, setShowForceAddModal] = useState(false);
+  const [forceAddData, setForceAddData] = useState<PrinterCreate | null>(null);
   const [existingSerials, setExistingSerials] = useState<string[]>([]);
 
   const addMutation = useMutation({
@@ -76,8 +82,9 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
             },
             {
               label: t('printers.toast.addAnyway'),
-              disabled: true,
-              tooltip: t('printers.toast.addAnywayDisabled'),
+              onClick: () => {
+                openForceAddModal(data);
+              },
             },
           ],
         });
@@ -103,8 +110,9 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
           },
           {
             label: t('printers.toast.addAnyway'),
-            disabled: true,
-            tooltip: t('printers.toast.addAnywayDisabled'),
+            onClick: () => {
+              openForceAddModal(data);
+            },
           },
         ],
       });
@@ -152,6 +160,16 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
     setShowRetryWarning(show);
   }, []);
 
+  const openForceAddModal = useCallback((data: PrinterCreate) => {
+    setForceAddData(data);
+    setShowForceAddModal(true);
+  }, []);
+
+  const closeForceAddModal = useCallback(() => {
+    setShowForceAddModal(false);
+    setForceAddData(null);
+  }, []);
+
   return (
     <AddPrinterContext.Provider
       value={{
@@ -160,6 +178,8 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
         isRetryActive,
         diagnosticResult,
         showRetryWarning,
+        showForceAddModal,
+        forceAddData,
         existingSerials,
         openAddModal,
         closeAddModal,
@@ -167,6 +187,8 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
         setRetryActive,
         setDiagnosticResult,
         setRetryWarning,
+        openForceAddModal,
+        closeForceAddModal,
         addPrinter,
         asyncAddPrinter,
       }}
