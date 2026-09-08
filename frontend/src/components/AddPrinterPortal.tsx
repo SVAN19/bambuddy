@@ -18,26 +18,12 @@ export function AddPrinterPortal() {
     showForceAddModal,
     forceAddData,
     existingSerials,
+    openAddModal,
     closeAddModal,
     closeForceAddModal,
     addPrinter,
     asyncAddPrinter,
   } = useAddPrinter();
-
-  if (!showAddModal) return null;
-
-  const modal = (
-    <AddPrinterModal
-      onClose={closeAddModal}
-      onAdd={addPrinter}
-      onAsyncAdd={asyncAddPrinter}
-      existingSerials={existingSerials}
-      initialFormData={isRetryActive ? (retryAddData || undefined) : undefined}
-      diagnosticResult={isRetryActive ? diagnosticResult : null}
-      showRetryWarning={showRetryWarning}
-      key={isRetryActive ? 'retry' : 'new'}
-    />
-  );
 
   return createPortal(
     <>
@@ -59,6 +45,10 @@ export function AddPrinterPortal() {
           onConfirm={() => {
             addPrinter(forceAddData);
             closeForceAddModal();
+          }}
+          onGoBack={() => {
+            closeForceAddModal();
+            openAddModal(existingSerials, forceAddData);
           }}
         />
       )}
