@@ -52,13 +52,6 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
       queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
       setShowAddModal(false);
     },
-    onError: (error: Error) => {
-      if (error instanceof ApiError && error.code === 'printer_connection_failed') {
-        showToast(t('printers.toast.connectionFailedNotAdded'), 'error');
-        return;
-      }
-      showToast(error.message || t('printers.toast.failedToAdd'), 'error');
-    },
   });
 
   const asyncAddPrinter = useCallback(async (data: PrinterCreate) => {
@@ -123,8 +116,24 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
   }, [showToast, showPersistentToast, dismissToast, t, addMutation]);
 
   const addPrinter = useCallback((data: PrinterCreate) => {
-    addMutation.mutate(data);
-  }, [addMutation]);
+    // Show loading toast while adding
+    showPersistentToast('add-printer-adding', t('printers.toast.addingPrinter', { printerName: data.name }), 'loading');
+
+    addMutation.mutate(data, {
+      onSuccess: () => {
+        dismissToast('add-printer-adding');
+        showToast(t('printers.toast.printerAddedSuccess', { printerName: data.name }), 'success');
+      },
+      onError: (error: Error) => {
+        dismissToast('add-printer-adding');
+        if (error instanceof ApiError && error.code === 'printer_connection_failed') {
+          showToast(t('printers.toast.connectionFailedNotAdded'), 'error');
+        } else {
+          showToast(error.message || t('printers.toast.failedToAdd'), 'error');
+        }
+      },
+    });
+  }, [showToast, showPersistentToast, dismissToast, t, addMutation]);
 
   const openAddModal = useCallback((existingSerials: string[], initialData?: PrinterCreate) => {
     setExistingSerials(existingSerials);

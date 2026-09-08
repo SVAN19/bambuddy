@@ -675,6 +675,9 @@ export interface PrinterCreate {
   camera_rotation?: number;
   plate_detection_enabled?: boolean;
   plate_detection_roi?: PlateDetectionROI;
+  // When true, skip the connection diagnostic and add the printer regardless
+  // of connectivity. Used by the "Add anyway" flow.
+  force_add?: boolean;
 }
 
 // Plate Detection

@@ -196,7 +196,8 @@ async def create_printer(
                 },
             )
 
-    printer = Printer(**printer_data.model_dump())
+    # Exclude force_add — it's an API-only flag, not a database column
+    printer = Printer(**printer_data.model_dump(exclude={'force_add'}))
     db.add(printer)
     await db.commit()
     await db.refresh(printer)
