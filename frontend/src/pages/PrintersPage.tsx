@@ -149,7 +149,7 @@ import type { Printer, PrinterCreate, PrinterStatus, AMSUnit, FirmwareUpdateInfo
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { AddPrinterModal } from '../components/AddPrinterModal';
+
 import { BulkPrinterToolbar, type PrinterState } from '../components/BulkPrinterToolbar';
 import { FileManagerModal } from '../components/FileManagerModal';
 import { EmbeddedCameraViewer } from '../components/EmbeddedCameraViewer';
@@ -8298,7 +8298,7 @@ export function PrintersPage() {
   });
   const queryClient = useQueryClient();
   const { showToast, showPersistentToast, dismissToast } = useToast();
-  const { showAddModal, retryAddData, isRetryActive, diagnosticResult, showRetryWarning, existingSerials, openAddModal, closeAddModal, setRetryData, setRetryActive, setDiagnosticResult, setRetryWarning, addPrinter, asyncAddPrinter } = useAddPrinter();
+  const { openAddModal } = useAddPrinter();
   const { hasPermission } = useAuth();
   // Which way the camera buttons open a stream. Chosen per click from the
   // button's own menu; null until this browser has made a choice, so the

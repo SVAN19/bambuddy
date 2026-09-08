@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api/client';
@@ -41,6 +41,9 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
   const [showForceAddModal, setShowForceAddModal] = useState(false);
   const [forceAddData, setForceAddData] = useState<PrinterCreate | null>(null);
   const [existingSerials, setExistingSerials] = useState<string[]>([]);
+  // Ref to avoid recreating asyncAddPrinter on every existingSerials change
+  const existingSerialsRef = useRef(existingSerials);
+  existingSerialsRef.current = existingSerials;
 
   const addMutation = useMutation({
     mutationFn: api.createPrinter,
@@ -105,7 +108,7 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
           {
             label: t('printers.toast.retry'),
             onClick: () => {
-              openAddModal(existingSerials, data);
+              openAddModal(existingSerialsRef.current, data);
             },
           },
           {
@@ -117,7 +120,7 @@ export function AddPrinterProvider({ children }: { children: ReactNode }) {
         ],
       });
     }
-  }, [showToast, showPersistentToast, dismissToast, t, addMutation, existingSerials]);
+  }, [showToast, showPersistentToast, dismissToast, t, addMutation]);
 
   const addPrinter = useCallback((data: PrinterCreate) => {
     addMutation.mutate(data);
