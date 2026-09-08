@@ -43,7 +43,8 @@ export function AddPrinterPortal() {
         <ForceAddWarningModal
           onClose={closeForceAddModal}
           onConfirm={() => {
-            addPrinter(forceAddData);
+            // Send force_add: true to skip connection diagnostic
+            addPrinter({ ...forceAddData, force_add: true });
             closeForceAddModal();
           }}
           onGoBack={() => {

@@ -46,6 +46,10 @@ class PrinterCreate(PrinterBase):
     # PrinterResponse. Direct exposure on PRINTERS_READ would let a Viewer
     # connect to the printer's MQTT and bypass Bambuddy's RBAC.
     access_code: str = Field(..., min_length=1, max_length=20)
+    # When True, skip the connection diagnostic and add the printer regardless
+    # of connectivity. Used by the frontend "Add anyway" flow where the user
+    # acknowledges the printer may be offline or misconfigured.
+    force_add: bool = Field(default=False)
 
 
 class PlateDetectionROI(BaseModel):

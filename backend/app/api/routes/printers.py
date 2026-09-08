@@ -163,31 +163,38 @@ async def create_printer(
     as an empty / never-connecting card on the dashboard — those reports
     were turning into support tickets that all traced back to a mistyped
     access code.
+
+    When ``force_add`` is True, the connection diagnostic is skipped and
+    the printer is persisted regardless of reachability. This supports the
+    frontend "Add anyway" flow where the user acknowledges the printer may
+    be offline or misconfigured.
     """
     # Check if serial number already exists
     result = await db.execute(select(Printer).where(Printer.serial_number == printer_data.serial_number))
     if result.scalar_one_or_none():
         raise HTTPException(400, "Printer with this serial number already exists")
 
-    test_result = await printer_manager.test_connection(
-        ip_address=printer_data.ip_address,
-        serial_number=printer_data.serial_number,
-        access_code=printer_data.access_code,
-    )
-    if not test_result.get("success"):
-        # The frontend renders the user-facing message via i18n on `code`;
-        # `message` is an English fallback for non-UI clients (curl / scripts).
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "printer_connection_failed",
-                "message": (
-                    "Could not connect to the printer. Verify IP address, serial number, "
-                    "and access code, and confirm LAN-only mode is enabled. "
-                    "The printer was not added."
-                ),
-            },
+    # Skip connection diagnostic when force_add is True
+    if not printer_data.force_add:
+        test_result = await printer_manager.test_connection(
+            ip_address=printer_data.ip_address,
+            serial_number=printer_data.serial_number,
+            access_code=printer_data.access_code,
         )
+        if not test_result.get("success"):
+            # The frontend renders the user-facing message via i18n on `code`;
+            # `message` is an English fallback for non-UI clients (curl / scripts).
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "printer_connection_failed",
+                    "message": (
+                        "Could not connect to the printer. Verify IP address, serial number, "
+                        "and access code, and confirm LAN-only mode is enabled. "
+                        "The printer was not added."
+                    ),
+                },
+            )
 
     printer = Printer(**printer_data.model_dump())
     db.add(printer)
