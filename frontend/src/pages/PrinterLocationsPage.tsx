@@ -17,6 +17,21 @@ import { getLocationIcon, setLocationIcon, removeLocationIcon } from '../utils/p
 import { getLocationColor, setLocationColor, removeLocationColor, getPresetColors } from '../utils/printerLocationColors';
 import { IconPicker, getIconByName } from '../components/IconPicker';
 
+// Helper to select the right plural form
+function pluralize(
+  count: number,
+  one: string,
+  few: string,
+  many: string,
+): string {
+  if (count === 1) return one;
+  // Russian pluralization rules: 2-4 -> few, 5-20 -> many, else -> many
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
+
 export function PrinterLocationsPage() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
