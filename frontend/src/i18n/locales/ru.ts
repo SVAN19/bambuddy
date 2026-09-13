@@ -937,6 +937,7 @@ export default {
       noResults: "Ничего не найдено",
       ungrouped: "Без группы",
       printer: "{{count}} принтер",
+      printer_one: "{{count}} принтер",
       printers: "принтеров",
       printer_few: "{{count}} принтера",
       printer_many: "{{count}} принтеров",

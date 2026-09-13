@@ -984,6 +984,7 @@ export default {
       noResults: 'No locations match your search',
       ungrouped: 'Ungrouped',
       printer: '{{count}} printer',
+      printer_one: '{{count}} printer',
       printers: 'printers',
       printer_few: '{{count}} printers',
       printer_many: '{{count}} printers',
