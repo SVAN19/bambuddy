@@ -974,7 +974,6 @@ export default {
       namePlaceholder: 'Location name',
       exists: 'Location already exists',
       deleteTitle: 'Delete Location',
-      deleteDescription: 'Are you sure? This will remove this location from {{count}} printer(s).',
       deleteConfirm: 'Delete',
       deleted: 'Location deleted',
       created: 'Location created',

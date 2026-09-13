@@ -34,7 +34,6 @@ export function AddPrinterPortal() {
           onAsyncAdd={asyncAddPrinter}
           existingSerials={existingSerials}
           initialFormData={isRetryActive ? (retryAddData || undefined) : undefined}
-          diagnosticResult={isRetryActive ? diagnosticResult : null}
           showRetryWarning={showRetryWarning}
           key={isRetryActive ? 'retry' : 'new'}
         />

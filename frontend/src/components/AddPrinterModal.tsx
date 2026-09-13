@@ -95,6 +95,7 @@ export function AddPrinterModal({
 
   // Countdown state for closing confirmation
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRetryWarning, setShowRetryWarning] = useState(showRetryWarningProp || false);
   const [locationInput, setLocationInput] = useState('');
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
@@ -266,19 +267,6 @@ export function AddPrinterModal({
       } finally {
         setCheckingSave(false);
       }
-      onAdd(form);
-    }
-  };
-
-  // Force add without diagnostic
-  const handleForceAdd = async () => {
-    if (onAsyncAdd) {
-      startClosingCountdown();
-      setTimeout(() => {
-        onAsyncAdd(form);
-      }, 100);
-    } else {
-      // Skip diagnostic, add directly
       onAdd(form);
     }
   };
