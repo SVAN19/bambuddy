@@ -8694,10 +8694,18 @@ export function PrintersPage() {
     return unsubscribe;
   }, [queryClient]);
 
-  // Filter printers by search term, status, and location
+  // Filter printers by search term, status, location, and disconnected state
   const filteredPrinters = useMemo(() => {
     if (!printers) return [];
     let result = printers;
+
+    // Hide disconnected printers
+    if (hideDisconnected) {
+      result = result.filter(p => {
+        const status = queryClient.getQueryData<{ connected: boolean; state: string | null; hms_errors?: HMSError[] }>(['printerStatus', p.id]);
+        return status?.connected === true;
+      });
+    }
 
     // Text search
     if (search.trim()) {
@@ -8735,7 +8743,7 @@ export function PrintersPage() {
 
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- statusCacheVersion is intentional: it forces recompute when WebSocket updates printer status cache
-  }, [printers, search, statusFilter, locationFilter, queryClient, statusCacheVersion]);
+  }, [printers, search, statusFilter, locationFilter, hideDisconnected, queryClient, statusCacheVersion]);
 
   // Derive unique locations for the location filter dropdown
   const availableLocations = useMemo(() => {
@@ -8896,9 +8904,22 @@ export function PrintersPage() {
       });
     }
 
+    // When hideDisconnected is enabled, filter out groups that would only
+    // contain offline printers. sortedPrinters already excludes disconnected
+    // printers when hideDisconnected is true (via filteredPrinters), so any
+    // group with length > 0 is guaranteed to have at least one visible printer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (hideDisconnected) {
+      for (const key of Object.keys(groups)) {
+        if (groups[key].length === 0) {
+          delete groups[key];
+        }
+      }
+    }
+
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- classifyPrinterStatus & filterKnownHMSErrors are stable module-level functions, not reactive deps; statusCacheVersion forces recompute on WebSocket status updates
-  }, [sortBy, sortedPrinters, queryClient, statusCacheVersion]);
+  }, [sortBy, sortedPrinters, queryClient, statusCacheVersion, hideDisconnected]);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
   const expandedToolbarControlsRef = useRef<HTMLDivElement>(null);
@@ -9311,8 +9332,8 @@ export function PrintersPage() {
         <div className="space-y-6">
           {(() => {
             const keys = sortBy === 'status'
-              ? STATUS_GROUP_ORDER.filter(k => groupedPrinters[k]?.length > 0)
-              : Object.keys(groupedPrinters);
+              ? STATUS_GROUP_ORDER.filter(k => groupedPrinters?.[k]?.length > 0)
+              : Object.keys(groupedPrinters || {}).filter(k => groupedPrinters![k]?.length > 0);
             // For status grouping, asc/desc flips the fixed priority order
             // (asc = error→offline, desc = offline→error). This matches the
             // sort-toggle behaviour for other groupings.
