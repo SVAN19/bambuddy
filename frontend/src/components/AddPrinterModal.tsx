@@ -64,7 +64,7 @@ export function AddPrinterModal({
   onAsyncAdd,
   initialFormData,
   showRetryWarning: showRetryWarningProp,
-} {
+}: {
   onClose: () => void;
   onAdd: (data: PrinterCreate) => void;
   existingSerials: string[];
