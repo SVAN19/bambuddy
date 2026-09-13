@@ -95,7 +95,6 @@ export function AddPrinterModal({
 
   // Countdown state for closing confirmation
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRetryWarning, setShowRetryWarning] = useState(showRetryWarningProp || false);
   const [locationInput, setLocationInput] = useState('');
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
@@ -237,7 +236,6 @@ export function AddPrinterModal({
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
     
     // Save location to cache before submitting
     saveLocationToCache();

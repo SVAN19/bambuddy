@@ -13,7 +13,6 @@ export function AddPrinterPortal() {
     showAddModal,
     retryAddData,
     isRetryActive,
-    diagnosticResult,
     showRetryWarning,
     showForceAddModal,
     forceAddData,
