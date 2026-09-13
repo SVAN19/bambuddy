@@ -143,7 +143,7 @@ import {
 
 // Aliased: lucide-react already exports a `Link` icon into this module.
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { api, firmwareApi, withStreamToken, ApiError, type PrinterDiagnosticResult } from '../api/client';
+import { api, firmwareApi, withStreamToken, type PrinterDiagnosticResult } from '../api/client';
 import { formatDateOnly, formatDateTime, formatETA, formatDuration, formatDurationFromHours, parseUTCDate } from '../utils/date';
 import type { Printer, PrinterCreate, PrinterStatus, AMSUnit, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, SpoolAssignment, HMSError, InventorySpool, SmartPlug } from '../api/client';
 import { Card, CardContent } from '../components/Card';
@@ -8297,7 +8297,7 @@ export function PrintersPage() {
     } catch { return {}; }
   });
   const queryClient = useQueryClient();
-  const { showToast, showPersistentToast, dismissToast } = useToast();
+  const { showToast } = useToast();
   const { openAddModal } = useAddPrinter();
   const { hasPermission } = useAuth();
   // Which way the camera buttons open a stream. Chosen per click from the

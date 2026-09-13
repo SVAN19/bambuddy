@@ -33,14 +33,51 @@ export default {
     installAppSuccess: 'Bambuddy was installed',
   },
 
-  // Diagnostic
   diagnostic: {
-    checklistTitle: 'Connection Diagnostics',
+    modalTitle: 'Connection diagnostic — {{name}}',
+    running: 'Running diagnostic...',
+    runningElapsed: 'Running diagnostic... ({{elapsed}}s)',
+    waitingForReportHint: 'Listening for the printer to publish a status report — this can take up to {{max}} seconds.',
+    runFailed: 'Diagnostic could not run: {{error}}',
+    retry: 'Run again',
+    runButton: 'Run diagnostic',
+    sectionTitle: 'Connection Diagnostic',
+    sectionDescription: "Check why a printer won't connect or won't print — port reachability, LAN developer mode, Docker network mode, and credentials.",
+    noPrinters: 'No printers configured.',
+    overall: {
+      ok: 'No problems found — the printer connection looks healthy.',
+      warnings: 'The printer should work, but some things need attention.',
+      problems: 'Found problems that explain why the printer won\'t connect or print.',
+    },
+    check: {
+      port_mqtt: {
+        title: 'Control port (MQTT 8883)',
+        pass: 'Reachable — the printer is accepting control connections.',
+        fail: 'Port 8883 is unreachable. The printer is powered off, on a different IP address, or a firewall is blocking it. Verify the printer IP and that nothing blocks port 8883.',
+        skip: 'Could not be checked — requires a live connection to the printer.',
+      },
+      port_telnet: {
+        title: 'Telnet port (23)',
+        pass: 'Reachable — telnet is accessible on the printer.',
+        fail: 'Port 23 is unreachable. This may indicate a network issue or that telnet is disabled.',
+        skip: 'Could not be checked — requires a live connection to the printer.',
+      },
+      lan_developer_mode: {
+        title: 'LAN Developer Mode',
+        pass: 'Developer Mode is enabled.',
+        fail: 'Developer Mode is OFF on the printer. Enable it in the printer\'s LAN settings — and confirm with OK. Without it, prints will not start.',
+        skip: 'Could not be checked — requires a live connection to the printer.',
+      },
+      printer_publishing: {
+        title: 'Printer is publishing status',
+        pass: 'The printer is publishing status updates — AMS, filaments, and K-profiles will mirror correctly to the slicer.',
+        fail: 'The MQTT broker accepted the connection but the printer has not published any status reports. This is almost always a wrong or mis-cased serial number — the device/<serial>/report topic is case-sensitive. Re-check the serial in printer settings against the screen on the printer.',
+        skip: 'Could not be checked — requires a live connection to the printer.',
+      },
+    },
   },
 
-  // Common
   common: {
-    plusNMore: '+{{count}} more',
     save: 'Save',
     saving: 'Saving...',
     cancel: 'Cancel',
@@ -7118,83 +7155,6 @@ export default {
       confirmPlugOff: 'Turn off {{name}}?',
       turnOn: 'Turn On',
       turnOff: 'Turn Off',
-    },
-  },
-
-  diagnostic: {
-    modalTitle: 'Connection diagnostic — {{name}}',
-    running: 'Running diagnostic...',
-    runningElapsed: 'Running diagnostic... ({{elapsed}}s)',
-    waitingForReportHint: 'Listening for the printer to publish a status report — this can take up to {{max}} seconds.',
-    runFailed: 'Diagnostic could not run: {{error}}',
-    retry: 'Run again',
-    runButton: 'Run diagnostic',
-    sectionTitle: 'Connection Diagnostic',
-    sectionDescription: 'Check why a printer won\'t connect or won\'t print — port reachability, LAN developer mode, Docker network mode, and credentials.',
-    noPrinters: 'No printers configured.',
-    overall: {
-      ok: 'No problems found — the printer connection looks healthy.',
-      warnings: 'The printer should work, but some things need attention.',
-      problems: 'Found problems that explain why the printer won\'t connect or print.',
-    },
-    check: {
-      port_mqtt: {
-        title: 'Control port (MQTT 8883)',
-        pass: 'Reachable — the printer is accepting control connections.',
-        fail: 'Port 8883 is unreachable. The printer is powered off, on a different IP address, or a firewall is blocking it. Verify the printer IP and that nothing blocks port 8883.',
-      },
-      port_ftps: {
-        title: 'File transfer port (FTPS 990)',
-        pass: 'Reachable — sending print files will work.',
-        warn: 'Port 990 is unreachable. Monitoring may still work, but sending prints to the printer will fail. Make sure port 990 is not blocked.',
-        warn_no_tls: 'Port 990 is open but the printer\'s file service is not completing a TLS handshake. Print files, covers and timelapses cannot be fetched, so archives stay empty. Restart the printer — unblocking the port will not help.',
-      },
-      external_storage: {
-        title: 'Store sent files on external storage (install step 4)',
-        pass: 'The printer reports this option is on — sent files will be stored on the SD card and archives will have thumbnails and slicer metadata.',
-        fail: 'The printer reports this option is off. Enable "Store sent files on external storage" — on newer firmware (P2S 01.02 / Bambu Studio 2.6+) the toggle lives on the printer\'s Print Settings; on older versions it\'s in Bambu Studio / OrcaSlicer\'s Device tab. Without it, every archived print is missing its thumbnail and slicer metadata.',
-        skip: 'Not checked — needs a live MQTT connection. On older slicers where this setting lives only in the slicer the printer never reports it, so this check will pass even when the option is off — verify install step 4 manually.',
-        skip_unsupported_model: 'This model has an SD slot but no way to turn the option on — current P1-series firmware doesn\'t expose the toggle in Bambu Studio and the printer has no screen. Nothing to fix here; archived prints may lack thumbnails and slicer metadata until Bambu Lab adds firmware support.',
-        fail_no_media: 'The option is on, but the printer reports no card or stick in its slot, so there is nowhere for sent files to go. Insert one and print again — until then every archived print will be missing its thumbnail and slicer metadata.',
-        warn_internal_storage: 'The option is on and storage is present, but the last print still went to the printer\'s internal storage, which Bambuddy cannot read. On H2-series and P2S, Bambu Studio\'s Print button always sends there whatever this option is set to. Prints archive with their name and timing, but without a thumbnail or slicer metadata. For complete archives, start prints from Bambuddy or slice in OrcaSlicer — or in Bambu Studio use Send with External selected, then start the print.',
-        warn_internal_history: 'The option is on and storage is present, but the last print ran from a file that was already on the printer — a re-print from its screen, a start from Handy, or a file sent earlier. That library sits on internal storage Bambuddy cannot read, and no setting changes it, because nothing was sent for that print. It still archives with its name and timing, but without a thumbnail or slicer metadata. For complete archives, start prints from Bambuddy or send them from the slicer.',
-      },
-      port_rtsps: {
-        title: 'Camera port ({{protocol}} {{port}})',
-        pass: 'Reachable — the camera stream will work.',
-        warn: 'Port {{port}} is unreachable. The live camera view will not work. This does not affect printing.',
-      },
-      network_mode: {
-        title: 'Docker network mode',
-        pass: 'Running in host network mode.',
-        warn: 'Bambuddy is running in Docker bridge networking. Printer discovery and the Virtual Printer need host network mode — recreate the container with "network_mode: host".',
-        skip: 'Not running in Docker — not applicable.',
-      },
-      subnet: {
-        title: 'Network subnet',
-        pass: 'The printer and Bambuddy are on the same subnet.',
-        warn: 'The printer ({{printer_ip}}) and Bambuddy ({{host_ip}}) are on different subnets. They may not reach each other unless routing between the subnets is configured.',
-        skip: 'Subnet could not be determined — skipped.',
-      },
-      mqtt_auth: {
-        title: 'Printer credentials',
-        pass: 'The printer accepted the connection.',
-        fail: 'The printer is reachable but Bambuddy is not connected to it. The access code or serial number is most likely wrong — the access code changes every time LAN Only or Developer Mode is toggled, so re-copy it from the printer screen. A printer that is rebooting, or already at its limit of simultaneous connections, can look the same.',
-        fail_auth_rejected: 'The printer refused Bambuddy\'s credentials. The access code or serial number is wrong — the access code changes every time LAN Only or Developer Mode is toggled, so re-copy it from the printer screen and save it in the printer settings.',
-        skip: 'Not checked — the printer could not be reached.',
-      },
-      developer_mode: {
-        title: 'LAN Developer Mode',
-        pass: 'Developer Mode is enabled.',
-        fail: 'Developer Mode is OFF on the printer. Enable it in the printer\'s LAN settings — and confirm with OK. Without it, prints will not start.',
-        skip: 'Could not be checked — requires a live connection to the printer.',
-      },
-      printer_publishing: {
-        title: 'Printer is publishing status',
-        pass: 'The printer is publishing status updates — AMS, filaments, and K-profiles will mirror correctly to the slicer.',
-        fail: 'The MQTT broker accepted the connection but the printer has not published any status reports. This is almost always a wrong or mis-cased serial number — the device/<serial>/report topic is case-sensitive. Re-check the serial in printer settings against the screen on the printer.',
-        skip: 'Could not be checked — requires a live connection to the printer.',
-      },
     },
   },
 

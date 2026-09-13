@@ -6,11 +6,11 @@ import type { PrinterCreate, DiscoveredPrinter, PrinterDiagnosticResult } from '
 import { getCachedPrinterLocations, addCachedPrinterLocation } from '../utils/printerLocationsCache';
 import { getLocationIcon } from '../utils/printerLocationIcons';
 import { getLocationColor } from '../utils/printerLocationColors';
-import { AVAILABLE_ICONS, getIconByName } from '../components/IconPicker';
+import { getIconByName } from '../components/IconPicker';
 import { Card, CardContent } from './Card';
 import { Button } from './Button';
 import { ConfirmModal } from './ConfirmModal';
-import { ConnectionDiagnosticModal, DiagnosticChecklist } from './ConnectionDiagnostic';
+import { ConnectionDiagnosticModal } from './ConnectionDiagnostic';
 
 // Map SSDP model codes to display names
 function mapModelCode(ssdpModel: string | null): string {
@@ -63,15 +63,13 @@ export function AddPrinterModal({
   existingSerials,
   onAsyncAdd,
   initialFormData,
-  diagnosticResult,
   showRetryWarning: showRetryWarningProp,
-}: {
+} {
   onClose: () => void;
   onAdd: (data: PrinterCreate) => void;
   existingSerials: string[];
   onAsyncAdd?: (data: PrinterCreate) => void;
   initialFormData?: PrinterCreate;
-  diagnosticResult?: any;
   showRetryWarning?: boolean;
 }) {
   const { t } = useTranslation();
@@ -97,7 +95,6 @@ export function AddPrinterModal({
 
   // Countdown state for closing confirmation
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRetryWarning, setShowRetryWarning] = useState(showRetryWarningProp || false);
   const [locationInput, setLocationInput] = useState('');
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);

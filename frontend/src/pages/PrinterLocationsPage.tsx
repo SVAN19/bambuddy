@@ -347,7 +347,7 @@ export function PrinterLocationsPage() {
 
   // Create location mutation — creates an empty location
   const createLocationMutation = useMutation({
-    mutationFn: async (locationName: string) => {
+    mutationFn: async (_locationName: string) => {
       // No printers are moved — location is created empty.
       // User will manually assign printers via the Move button.
       await Promise.resolve();
@@ -569,7 +569,7 @@ export function PrinterLocationsPage() {
         </div>
         <Button
           onClick={() => setHideEmptyGroups(!hideEmptyGroups)}
-          variant={hideEmptyGroups ? 'default' : 'secondary'}
+          variant={hideEmptyGroups ? 'secondary' : 'secondary'}
           className="h-10"
         >
           <Box className="w-4 h-4 mr-1" />
@@ -586,7 +586,7 @@ export function PrinterLocationsPage() {
               setGroupSelectionMode(true);
             }
           }}
-          variant={groupSelectionMode ? 'default' : 'secondary'}
+          variant={groupSelectionMode ? 'secondary' : 'secondary'}
           className="h-10"
         >
           <CheckSquare className="w-4 h-4 mr-1" />
@@ -696,7 +696,6 @@ export function PrinterLocationsPage() {
                         <div className="p-2 rounded-lg bg-bambu-dark group-hover:bg-bambu-dark-tertiary transition-colors relative">
                           {(() => {
                             const iconName = getLocationIcon(name);
-                            const color = getLocationColor(name);
                             if (iconName) {
                               const Icon = getIconByName(iconName);
                               return <Icon className="w-[25px] h-[25px] text-bambu-gray" />;
