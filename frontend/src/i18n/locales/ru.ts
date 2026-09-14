@@ -348,6 +348,7 @@ export default {
     cardSize: {
       small: "Маленькие карточки",
       medium: "Средние карточки",
+      semiMedium: "Полусредние карточки",
       large: "Большие карточки",
       extraLarge: "Очень большие карточки",
     },

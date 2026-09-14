@@ -1987,7 +1987,7 @@ const DRYING_PRESETS: Record<string, DryingPreset> = {
 // (#1848). S is the dense fleet view and M is the default, so both stay at
 // 1.0 and an existing install looks identical until the user picks L or XL --
 // the same control the request asked to have this follow.
-const CARD_BODY_SCALE: Record<number, number> = { 1: 1, 2: 1, 3: 1.2, 4: 1.4 };
+const CARD_BODY_SCALE: Record<number, number> = { 1: 1, 2: 1, 3: 1, 4: 1.2, 5: 1.4 };
 
 // The scaled sizes, handed to the card subtree as custom properties. Every
 // converted class names its old fixed value as the fallback, so anything that
@@ -8666,18 +8666,19 @@ export function PrintersPage() {
     localStorage.setItem('printerSortAsc', String(newAsc));
   };
 
-  // Grid classes based on card size (1=small, 2=medium, 3=large, 4=xl)
+  // Grid classes based on card size: 1=S, 2=SM, 3=M, 4=L, 5=XL
   const getGridClasses = () => {
     switch (cardSize) {
-      case 1: return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'; // S: many small cards
-      case 2: return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'; // M: medium cards
-      case 3: return 'grid-cols-1 lg:grid-cols-2'; // L: large cards, 2 columns max
-      case 4: return 'grid-cols-1'; // XL: single column, full width
+      case 1: return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'; // S: 5 cols
+      case 2: return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4'; // SM: 4 cols
+      case 3: return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'; // M: 3 cols
+      case 4: return 'grid-cols-1 lg:grid-cols-2'; // L: 2 cols
+      case 5: return 'grid-cols-1'; // XL: 1 col
       default: return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3';
     }
   };
 
-  const cardSizeLabels = ['S', 'M', 'L', 'XL'];
+  const cardSizeLabels = ['S', 'SM', 'M', 'L', 'XL'];
 
   // Increment version counter whenever a printer status cache entry is updated so
   // filteredPrinters re-computes reactively on WebSocket-driven status changes.
@@ -9097,7 +9098,9 @@ export function PrintersPage() {
       {/* Card size selector */}
       <div className={`flex h-8 items-center bg-bambu-dark rounded-lg border border-bambu-dark-tertiary ${pageView === 'camwall' ? 'opacity-40 pointer-events-none' : ''} ${inMenu ? 'w-full' : ''}`}>
         {cardSizeLabels.map((label, index) => {
-          const size = index + 1;
+          // Map label → numeric size so inserting SM doesn't shift all others
+          const sizeMap: Record<string, number> = { S: 1, SM: 2, M: 3, L: 4, XL: 5 };
+          const size = sizeMap[label];
           const isSelected = cardSize === size;
           return (
             <button
@@ -9116,7 +9119,7 @@ export function PrintersPage() {
                   ? 'bg-bambu-green text-white'
                   : 'text-white hover:bg-bambu-dark-tertiary'
               }`}
-              title={label === 'S' ? t('printers.cardSize.small') : label === 'M' ? t('printers.cardSize.medium') : label === 'L' ? t('printers.cardSize.large') : t('printers.cardSize.extraLarge')}
+              title={label === 'S' ? t('printers.cardSize.small') : label === 'SM' ? t('printers.cardSize.semiMedium') : label === 'M' ? t('printers.cardSize.medium') : label === 'L' ? t('printers.cardSize.large') : t('printers.cardSize.extraLarge')}
             >
               {label}
             </button>
