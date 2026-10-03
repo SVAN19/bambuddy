@@ -1,532 +1,439 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Box, ChevronDown, Loader2, Plus, Search, Trash2, Move, UserMinus, Pencil, CheckSquare, Square } from 'lucide-react';
+import { Box, CheckSquare, ChevronDown, Loader2, Move, Pencil, Plus, Search, Square, Trash2, UserMinus, X } from 'lucide-react';
 import { api } from '../api/client';
-import type { Printer as PrinterType } from '../api/client';
+import type { Printer, PrinterLocation } from '../api/client';
 import { Button } from '../components/Button';
 import { Card, CardContent } from '../components/Card';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { IconPicker, AVAILABLE_ICONS } from '../components/IconPicker';
+import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import {
-  getCachedPrinterLocations,
-  addCachedPrinterLocation,
-  removeCachedPrinterLocation,
-} from '../utils/printerLocationsCache';
-import { getLocationIcon, setLocationIcon, removeLocationIcon } from '../utils/printerLocationIcons';
-import { getLocationColor, setLocationColor, removeLocationColor, getPresetColors } from '../utils/printerLocationColors';
-import { IconPicker, getIconByName } from '../components/IconPicker';
+
+// Matches printers.location / printer_locations.name (VARCHAR(100)).
+const LOCATION_NAME_MAX_LENGTH = 100;
+
+const LOCATION_COLORS = [
+  '#ef4444', // red
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#14b8a6', // teal
+  '#3b82f6', // blue
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#6b7280', // gray
+];
+
+type SortMode = 'name-asc' | 'name-desc' | 'count-asc' | 'count-desc';
+const SORT_MODES: SortMode[] = ['name-asc', 'name-desc', 'count-asc', 'count-desc'];
+
+// Per-viewer conveniences only; the locations themselves live on the server.
+const HIDE_EMPTY_KEY = 'printerLocations.hideEmpty';
+const SORT_KEY = 'printerLocations.sort';
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const value = localStorage.getItem(key);
+    return allowed.includes(value as T) ? (value as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Private mode or storage disabled: the setting just is not remembered.
+  }
+}
+
+const locationOf = (printer: Printer) => printer.location?.trim() || '';
+
+function LocationIcon({ location }: { location: Pick<PrinterLocation, 'icon' | 'color'> }) {
+  const Icon = AVAILABLE_ICONS.find((i) => i.name === location.icon)?.icon ?? Box;
+  return (
+    <div className="p-2 rounded-lg bg-bambu-dark relative overflow-hidden flex-shrink-0">
+      <Icon className="w-[25px] h-[25px] text-bambu-gray" />
+      {location.color && (
+        <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: location.color }} />
+      )}
+    </div>
+  );
+}
+
+interface PrinterRowProps {
+  printer: Printer;
+  status?: { connected?: boolean; state?: string | null };
+  selected: boolean;
+  canEdit: boolean;
+  busy: boolean;
+  onToggle: () => void;
+  onMove: () => void;
+  onRemove?: () => void;
+}
+
+function PrinterRow({ printer, status, selected, canEdit, busy, onToggle, onMove, onRemove }: PrinterRowProps) {
+  const { t } = useTranslation();
+  const state = status?.state;
+  const connected = status?.connected;
+  const label = !connected
+    ? t('printers.status.offline')
+    : state === 'RUNNING'
+      ? t('printers.status.printing')
+      : state === 'PAUSE'
+        ? t('printers.status.paused')
+        : state === 'FINISH'
+          ? t('printers.status.finished')
+          : t('printers.status.idle');
+  const badge = !connected
+    ? 'bg-gray-500/20 text-gray-400'
+    : state === 'RUNNING'
+      ? 'bg-orange-500/20 text-orange-400'
+      : state === 'PAUSE'
+        ? 'bg-yellow-500/20 text-yellow-400'
+        : state === 'FINISH'
+          ? 'bg-bambu-green/20 text-bambu-green'
+          : 'bg-bambu-dark text-bambu-gray';
+
+  return (
+    <div
+      className={`flex items-center justify-between gap-2 py-2 px-3 rounded-lg transition-colors ${
+        selected ? 'bg-bambu-green/10 border border-bambu-green/30' : 'bg-bambu-dark-secondary hover:bg-bambu-dark'
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        {canEdit && (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="text-bambu-gray hover:text-bambu-green transition-colors"
+            title={t('printers.locations.selectPrinter')}
+            aria-label={t('printers.locations.selectPrinter')}
+            aria-pressed={selected}
+          >
+            {selected ? <CheckSquare className="w-4 h-4 text-bambu-green" /> : <Square className="w-4 h-4" />}
+          </button>
+        )}
+        <div
+          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+            connected ? (state === 'RUNNING' || state === 'PAUSE' ? 'bg-orange-500' : 'bg-bambu-green') : 'bg-gray-500'
+          }`}
+        />
+        <div className="min-w-0">
+          <p className="text-white text-sm font-medium truncate">{printer.name}</p>
+          <p className="text-xs text-bambu-gray">{printer.model || t('printers.status.unknown')}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className={`text-xs px-2 py-1 rounded-full ${badge}`}>{label}</span>
+        {canEdit && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onMove}
+            disabled={busy}
+            className="text-bambu-gray hover:text-bambu-green hover:bg-bambu-green/10"
+            title={t('printers.locations.move')}
+            aria-label={t('printers.locations.move')}
+          >
+            <Move className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        {canEdit && onRemove && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRemove}
+            disabled={busy}
+            className="text-bambu-gray hover:text-red-400 hover:bg-red-500/10"
+            title={t('printers.locations.removeFromLocation')}
+            aria-label={t('printers.locations.removeFromLocation')}
+          >
+            <UserMinus className="w-3.5 h-3.5" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface LocationDialogProps {
+  initial?: PrinterLocation;
+  saving: boolean;
+  onSave: (value: { name: string; icon: string; color: string }) => void;
+  onCancel: () => void;
+}
+
+function LocationDialog({ initial, saving, onSave, onCancel }: LocationDialogProps) {
+  const { t } = useTranslation();
+  const [name, setName] = useState(initial?.name ?? '');
+  const [icon, setIcon] = useState(initial?.icon ?? '');
+  const [color, setColor] = useState(initial?.color ?? '');
+  const canSave = name.trim().length > 0 && !saving;
+  const save = () => canSave && onSave({ name: name.trim(), icon, color });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-md">
+        <CardContent className="space-y-4">
+          <h2 className="text-lg font-semibold text-white">
+            {initial ? t('printers.locations.editTitle') : t('printers.locations.createTitle')}
+          </h2>
+          <input
+            type="text"
+            value={name}
+            maxLength={LOCATION_NAME_MAX_LENGTH}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t('printers.locations.namePlaceholder')}
+            aria-label={t('printers.locations.namePlaceholder')}
+            className="w-full px-4 py-2 text-sm bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save();
+              if (e.key === 'Escape') onCancel();
+            }}
+          />
+          <div>
+            <p className="text-sm text-bambu-gray mb-2">{t('printers.locations.icon')}</p>
+            <IconPicker value={icon} onChange={setIcon} />
+          </div>
+          <div>
+            <p className="text-sm text-bambu-gray mb-2">{t('printers.locations.color')}</p>
+            <div className="flex gap-2 flex-wrap">
+              {LOCATION_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(color === c ? '' : c)}
+                  className={`w-8 h-8 rounded-lg transition-all ${
+                    color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-bambu-dark-secondary scale-110' : 'hover:scale-105'
+                  }`}
+                  style={{ backgroundColor: c }}
+                  title={c}
+                  aria-label={c}
+                  aria-pressed={color === c}
+                />
+              ))}
+              {color && (
+                <button
+                  type="button"
+                  onClick={() => setColor('')}
+                  className="w-8 h-8 rounded-lg border-2 border-bambu-dark-tertiary bg-bambu-dark-secondary text-bambu-gray hover:text-white hover:border-bambu-gray transition-all flex items-center justify-center"
+                  title={t('printers.locations.noColor')}
+                  aria-label={t('printers.locations.noColor')}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={onCancel} disabled={saving}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={save} disabled={!canSave}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : initial ? t('common.save') : t('printers.locations.create')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+interface MoveDialogProps {
+  count: number;
+  printerName?: string;
+  locations: PrinterLocation[];
+  saving: boolean;
+  onMove: (location: string | null) => void;
+  onCancel: () => void;
+}
+
+const NO_LOCATION = '__none__';
+
+function MoveDialog({ count, printerName, locations, saving, onMove, onCancel }: MoveDialogProps) {
+  const { t } = useTranslation();
+  const [target, setTarget] = useState('');
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-md">
+        <CardContent className="space-y-4">
+          <h2 className="text-lg font-semibold text-white">
+            {count === 1 ? t('printers.locations.moveTitle') : t('printers.locations.moveTitleMany', { count })}
+          </h2>
+          {printerName && <p className="text-sm text-bambu-gray">{printerName}</p>}
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            aria-label={t('printers.locations.targetPlaceholder')}
+            className="w-full px-4 py-2 text-sm bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
+            disabled={saving}
+            autoFocus
+          >
+            <option value="" disabled>
+              {t('printers.locations.targetPlaceholder')}
+            </option>
+            {locations.map((loc) => (
+              <option key={loc.name} value={loc.name}>
+                {loc.name}
+              </option>
+            ))}
+            <option value={NO_LOCATION}>{t('printers.locations.noLocation')}</option>
+          </select>
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={onCancel} disabled={saving}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={() => onMove(target === NO_LOCATION ? null : target)} disabled={saving || !target}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t('printers.locations.moveButton')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function PrinterLocationsPage() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canEdit = hasPermission('printers:update');
 
   const [search, setSearch] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    name: string;
-    count: number;
-    isBulkDelete?: boolean;
-    names?: string[];
-  } | null>(null);
-  const [createLocation, setCreateLocation] = useState(false);
-  const [newLocationName, setNewLocationName] = useState('');
-  const [createLocationIcon, setCreateLocationIcon] = useState('');
-  const [createLocationColor, setCreateLocationColor] = useState('');
-  const [expandedLocation, setExpandedLocation] = useState<string | null>(null);
-
-  // Per-printer move: which printer + which target location
-  const [movePrinter, setMovePrinter] = useState<{ id: number; name: string } | null>(null);
-  const [moveTarget, setMoveTarget] = useState<string>('');
-
-  // Edit location (name + icon + color)
-  const [editLocation, setEditLocation] = useState<{ name: string } | null>(null);
-  const [editLocationName, setEditLocationName] = useState('');
-  const [editLocationIcon, setEditLocationIcon] = useState('');
-  const [editLocationColor, setEditLocationColor] = useState('');
-
-  // Hide empty groups toggle — read from localStorage on mount
-  const [hideEmptyGroups, setHideEmptyGroups] = useState(() => {
-    try {
-      const saved = localStorage.getItem('hideEmptyGroups');
-      return saved === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  // Persist hideEmptyGroups to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('hideEmptyGroups', String(hideEmptyGroups));
-    } catch {
-      // localStorage unavailable
-    }
-  }, [hideEmptyGroups]);
-
-  // Bulk selection
-  const [selectedPrinterIds, setSelectedPrinterIds] = useState<Set<number>>(new Set());
-  const [bulkMoveTarget, setBulkMoveTarget] = useState<string>('');
-  const [showBulkMove, setShowBulkMove] = useState(false);
-
-  // Group selection mode
-  const [groupSelectionMode, setGroupSelectionMode] = useState(false);
-  const [selectedGroupNames, setSelectedGroupNames] = useState<Set<string>>(new Set());
-
-  // Collapse expanded groups when entering group selection mode
-  useEffect(() => {
-    if (groupSelectionMode) {
-      setExpandedLocation(null);
-    }
-  }, [groupSelectionMode]);
-
-  // Group sort mode — persisted in localStorage
-  const [sortMode, setSortMode] = useState<'name-asc' | 'name-desc' | 'count-asc' | 'count-desc'>(() => {
-    try {
-      const saved = localStorage.getItem('locationSortMode');
-      if (saved === 'name-desc' || saved === 'count-asc' || saved === 'count-desc') return saved;
-    } catch { /* ignore */ }
-    return 'name-asc';
-  });
-
-  // Persist sort mode
-  useEffect(() => {
-    try {
-      localStorage.setItem('locationSortMode', sortMode);
-    } catch { /* ignore */ }
-  }, [sortMode]);
-
-  // Sort dropdown
+  const [hideEmpty, setHideEmpty] = useState(() => readStored(HIDE_EMPTY_KEY, ['true', 'false'], 'false') === 'true');
+  const [sortMode, setSortMode] = useState<SortMode>(() => readStored(SORT_KEY, SORT_MODES, 'name-asc'));
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectingLocations, setSelectingLocations] = useState(false);
+  const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
+  const [selectedPrinters, setSelectedPrinters] = useState<Set<number>>(new Set());
+  const [dialog, setDialog] = useState<{ mode: 'create' } | { mode: 'edit'; location: PrinterLocation } | null>(null);
+  const [moving, setMoving] = useState<{ ids: number[]; printerName?: string } | null>(null);
+  const [deleting, setDeleting] = useState<string[] | null>(null);
 
-  // Fetch all printers to derive locations
-  const { data: printers, isLoading } = useQuery({
-    queryKey: ['printers'],
-    queryFn: api.getPrinters,
-  });
-
-  // Derive unique locations from printers + cached names
-  // Computed on every render — no useMemo needed, array is tiny.
-  const locations: [string, number][] = (() => {
-    if (!printers) return [];
-
-    const locationMap = new Map<string, number>();
-    printers.forEach((p: PrinterType) => {
-      const loc = p.location || '';
-      locationMap.set(loc, (locationMap.get(loc) || 0) + 1);
-    });
-
-    // Merge with cached (possibly empty) locations so they show up even without printers
-    const cached = getCachedPrinterLocations();
-    const ungroupedKey = '';
-    for (const name of cached) {
-      if (name === ungroupedKey) continue;
-      if (!locationMap.has(name)) {
-        locationMap.set(name, 0); // 0 printers — user hasn't assigned any yet
-      }
-    }
-
-    return Array.from(locationMap.entries());
-  })();
-
-  // Initial sync: populate cache with any real locations that aren't cached yet
+  useEffect(() => writeStored(HIDE_EMPTY_KEY, String(hideEmpty)), [hideEmpty]);
+  useEffect(() => writeStored(SORT_KEY, sortMode), [sortMode]);
   useEffect(() => {
-    const printerLocs = printers?.map((p: PrinterType) => p.location || '') || [];
-    const cache = new Set(getCachedPrinterLocations());
-    const newNames = printerLocs.filter((n) => n !== '' && !cache.has(n));
-    if (newNames.length > 0) {
-      const updated = [...getCachedPrinterLocations(), ...newNames];
-      localStorage.setItem('printerLocationsCache', JSON.stringify(updated));
+    if (selectingLocations) setExpanded(null);
+  }, [selectingLocations]);
+
+  const { data: printers, isLoading: printersLoading } = useQuery({ queryKey: ['printers'], queryFn: api.getPrinters });
+  const { data: locations, isLoading: locationsLoading } = useQuery({
+    queryKey: ['printer-locations'],
+    queryFn: api.getPrinterLocations,
+  });
+
+  // Same query the printer cards use, so the cache and the WebSocket updates
+  // are shared rather than polled twice.
+  const statusQueries = useQueries({
+    queries: (printers ?? []).map((p) => ({
+      queryKey: ['printerStatus', p.id],
+      queryFn: () => api.getPrinterStatus(p.id),
+      refetchInterval: 30000,
+    })),
+  });
+  const statusById = new Map((printers ?? []).map((p, i) => [p.id, statusQueries[i]?.data]));
+
+  const printersByLocation = useMemo(() => {
+    const map = new Map<string, Printer[]>();
+    for (const p of printers ?? []) {
+      const key = locationOf(p);
+      map.set(key, [...(map.get(key) ?? []), p]);
     }
-  }, []); // run once on mount
+    return map;
+  }, [printers]);
+  const ungrouped = printersByLocation.get('') ?? [];
+  const groupedCount = (printers?.length ?? 0) - ungrouped.length;
 
-  // Filter locations by search
-  const filteredLocations = useMemo(() => {
-    if (!search.trim()) return locations;
-    const q = search.toLowerCase();
-    return locations.filter(([name]) => name.toLowerCase().includes(q));
-  }, [locations, search]);
-
-  // Filter out empty groups if toggle is on
-  const displayedLocations = useMemo(() => {
-    let result = hideEmptyGroups
-      ? filteredLocations.filter(([, count]) => count > 0)
-      : filteredLocations;
-
-    // Ungrouped (empty name) always first
-    const ungrouped = result.find(([name]) => !name);
-    const named = result.filter(([name]) => name);
-
-    // Sort named groups
-    const sorted = [...named].sort(([a, countA], [b, countB]) => {
+  const displayed = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = (locations ?? []).filter(
+      (loc) => (!q || loc.name.toLowerCase().includes(q)) && (!hideEmpty || loc.printer_count > 0),
+    );
+    const byName = (a: PrinterLocation, b: PrinterLocation) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    return [...list].sort((a, b) => {
       switch (sortMode) {
-        case 'name-asc':
-          return a.localeCompare(b);
         case 'name-desc':
-          return b.localeCompare(a);
+          return byName(b, a);
         case 'count-asc':
-          return countA - countB || a.localeCompare(b);
+          return a.printer_count - b.printer_count || byName(a, b);
         case 'count-desc':
-          return countB - countA || a.localeCompare(b);
+          return b.printer_count - a.printer_count || byName(a, b);
+        default:
+          return byName(a, b);
       }
     });
+  }, [locations, search, hideEmpty, sortMode]);
 
-    return ungrouped ? [ungrouped, ...sorted] : sorted;
-  }, [filteredLocations, hideEmptyGroups, sortMode]);
-
-  // Get printers for a location
-  const getPrintersInLocation = (locationName: string) => {
-    return (printers || []).filter(p => (p.location || '') === locationName);
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['printer-locations'] });
+    queryClient.invalidateQueries({ queryKey: ['printers'] });
   };
+  const fail = (error: unknown) =>
+    showToast(t('printers.locations.failed', { error: error instanceof Error ? error.message : String(error) }), 'error');
 
-  // Get printer status from query cache (stable across renders)
-  const getPrinterStatus = useCallback(
-    (printerId: number) => {
-      return queryClient.getQueryData<{ connected: boolean; state: string | null }>([
-        'printerStatus',
-        printerId,
-      ]);
+  const saveMutation = useMutation({
+    mutationFn: ({ value, location }: { value: { name: string; icon: string; color: string }; location?: PrinterLocation }) =>
+      location
+        ? api.updatePrinterLocation({
+            name: location.name,
+            ...(value.name !== location.name ? { new_name: value.name } : {}),
+            icon: value.icon || null,
+            color: value.color || null,
+          })
+        : api.createPrinterLocation({ name: value.name, icon: value.icon || null, color: value.color || null }),
+    onSuccess: (saved, { location }) => {
+      refresh();
+      if (location && expanded === location.name) setExpanded(saved.name);
+      showToast(location ? t('printers.locations.saved') : t('printers.locations.created'));
+      setDialog(null);
     },
-    [queryClient],
-  );
+    onError: fail,
+  });
 
-  // Delete location mutation — reads fresh data from cache instead of stale closure
-  const deleteLocationMutation = useMutation({
-    mutationFn: async (locationName: string) => {
-      const currentPrinters = queryClient.getQueryData<PrinterType[]>(['printers']) || [];
-
-      const printersInLocation = currentPrinters.filter(
-        (p) => (p.location || '') === locationName,
-      );
-
-      if (printersInLocation.length === 0) return;
-
-      // Use empty string '' to clear location — `undefined` may be dropped by JSON.stringify
-      await Promise.all(
-        printersInLocation.map((p) => api.updatePrinter(p.id, { location: '' })),
-      );
+  const moveMutation = useMutation({
+    mutationFn: ({ ids, location }: { ids: number[]; location: string | null }) => api.assignPrinterLocation(ids, location),
+    onSuccess: ({ moved }) => {
+      refresh();
+      showToast(t('printers.locations.moved', { count: moved }));
+      setSelectedPrinters(new Set());
+      setMoving(null);
     },
-    onSuccess: (_, locationName) => {
-      removeCachedPrinterLocation(locationName);
-      removeLocationIcon(locationName);
-      removeLocationColor(locationName);
-      queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(t('printers.locations.deleted', 'Location deleted'));
-      setDeleteConfirm(null);
-    },
+    onError: fail,
+  });
 
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : t('printers.locations.deleteError', 'Failed to delete location');
-      showToast(message, 'error');
-      setDeleteConfirm(null);
+  const deleteMutation = useMutation({
+    mutationFn: (names: string[]) => api.deletePrinterLocations(names),
+    onSuccess: ({ deleted }) => {
+      refresh();
+      showToast(t('printers.locations.deleted', { count: deleted }));
+      setSelectedLocations(new Set());
+      setSelectingLocations(false);
+      setDeleting(null);
+    },
+    onError: (error) => {
+      fail(error);
+      setDeleting(null);
     },
   });
 
-  // Remove printer from group mutation
-  const removeFromGroupMutation = useMutation({
-    mutationFn: ({ printerId }: { printerId: number }) =>
-      api.updatePrinter(printerId, { location: '' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(t('printers.locations.removedFromGroup', 'Printer removed from group'));
-    },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : t('printers.locations.removeFromGroupError', 'Failed to remove printer from group');
-      showToast(message, 'error');
-    },
-  });
+  const busy = moveMutation.isPending || deleteMutation.isPending || saveMutation.isPending;
 
-  // Edit location mutation (name + icon + color)
-  const editLocationMutation = useMutation({
-    mutationFn: async ({
-      oldName,
-      newName,
-      newIcon,
-      newColor,
-    }: {
-      oldName: string;
-      newName: string;
-      newIcon: string;
-      newColor: string;
-    }) => {
-      const currentPrinters = queryClient.getQueryData<PrinterType[]>(['printers']) || [];
-      const printersInLocation = currentPrinters.filter(
-        (p) => (p.location || '') === oldName,
-      );
-      if (printersInLocation.length === 0) return;
-      await Promise.all(
-        printersInLocation.map((p) => api.updatePrinter(p.id, { location: newName })),
-      );
-      return { oldName, newName, newIcon, newColor };
-    },
-    onSuccess: (_, { oldName, newName, newIcon, newColor }) => {
-      removeCachedPrinterLocation(oldName);
-      if (oldName !== newName) {
-        removeLocationIcon(oldName);
-        removeLocationColor(oldName);
-      }
-      addCachedPrinterLocation(newName);
-      setLocationIcon(newName, newIcon);
-      setLocationColor(newName, newColor);
-      queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(t('printers.locations.editSaved', 'Location updated'));
-      setEditLocation(null);
-      setEditLocationName('');
-      setEditLocationIcon('');
-      setEditLocationColor('');
-    },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : t('printers.locations.editError', 'Failed to update location');
-      showToast(message, 'error');
-      setEditLocation(null);
-      setEditLocationName('');
-      setEditLocationIcon('');
-      setEditLocationColor('');
-    },
-  });
-
-  // Move single printer mutation
-  const movePrinterMutation = useMutation({
-    mutationFn: ({
-      printerId,
-      location,
-    }: {
-      printerId: number;
-      location: string;
-    }) => api.updatePrinter(printerId, { location }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(t('printers.locations.moved', 'Printer moved'));
-      setMovePrinter(null);
-    },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : t('printers.locations.moveError', 'Failed to move printer');
-      showToast(message, 'error');
-    },
-  });
-
-  // Bulk move mutation
-  const bulkMoveMutation = useMutation({
-    mutationFn: async ({
-      printerIds,
-      location,
-    }: {
-      printerIds: number[];
-      location: string;
-    }) => {
-      await Promise.all(
-        printerIds.map((id) => api.updatePrinter(id, { location })),
-      );
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(`${pluralize(selectedPrinterIds.size, t('printers.locations.printer'), t('printers.locations.printer_few'), t('printers.locations.printer_many'))} ${t('printers.locations.moved')}`);
-      clearSelection();
-      setShowBulkMove(false);
-    },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : t('printers.locations.bulkMoveError', 'Failed to move printers');
-      showToast(message, 'error');
-    },
-  });
-
-  // Create location mutation — creates an empty location
-  const createLocationMutation = useMutation({
-    mutationFn: async (locationName: string) => {
-      // No printers are moved — location is created empty.
-      // User will manually assign printers via the Move button.
-      await Promise.resolve();
-    },
-    onSuccess: () => {
-      setLocationIcon(newLocationName, createLocationIcon);
-      setLocationColor(newLocationName, createLocationColor);
-      queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(t('printers.locations.created', 'Location created'));
-      setCreateLocation(false);
-      setNewLocationName('');
-      setCreateLocationIcon('');
-      setCreateLocationColor('');
-    },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : t('printers.locations.createError', 'Failed to create location');
-      showToast(message, 'error');
-    },
-  });
-
-  // Bulk delete groups mutation
-  const bulkDeleteGroupsMutation = useMutation({
-    mutationFn: async (groupNames: string[]) => {
-      const currentPrinters = queryClient.getQueryData<PrinterType[]>(['printers']) || [];
-
-      const printersToRemove = currentPrinters.filter((p) =>
-        groupNames.includes((p.location || '')),
-      );
-
-      // Use empty string '' to clear location
-      await Promise.all(
-        printersToRemove.map((p) => api.updatePrinter(p.id, { location: '' })),
-      );
-
-      return groupNames;
-    },
-    onSuccess: (_, groupNames) => {
-      groupNames.forEach((name) => {
-        removeCachedPrinterLocation(name);
-        removeLocationIcon(name);
-        removeLocationColor(name);
-      });
-      queryClient.invalidateQueries({ queryKey: ['printers'] });
-      showToast(`${pluralize(groupNames.length, t('printers.locations.group_one'), t('printers.locations.group_few'), t('printers.locations.group_many'))} ${t('printers.locations.deleted')}`);
-      clearGroupSelection();
-      setGroupSelectionMode(false);
-      setDeleteConfirm(null);
-    },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : t('printers.locations.deleteGroupsError', 'Failed to delete groups');
-      showToast(message, 'error');
-      setGroupSelectionMode(false);
-      setDeleteConfirm(null);
-    },
-  });
-
-  const handleCreateLocation = () => {
-    if (!newLocationName.trim()) {
-      showToast(t('printers.locations.nameRequired', 'Location name is required'), 'error');
-      return;
-    }
-    // Check if location already exists in DB
-    if (locations.some(([name]) => name === newLocationName.trim())) {
-      showToast(t('printers.locations.exists', 'Location already exists'), 'error');
-      return;
-    }
-    // Cache the new location for future autocomplete
-    const trimmedName = newLocationName.trim();
-    addCachedPrinterLocation(trimmedName);
-    createLocationMutation.mutate(trimmedName);
+  const toggle = <T,>(set: Set<T>, value: T) => {
+    const next = new Set(set);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    return next;
   };
 
-  const handleCancelCreate = () => {
-    setCreateLocation(false);
-    setNewLocationName('');
-    setCreateLocationIcon('');
-    setCreateLocationColor('');
-  };
-
-  const handleCancelMove = () => {
-    setMovePrinter(null);
-    setMoveTarget('');
-  };
-
-  const handleConfirmMove = () => {
-    if (!movePrinter || !moveTarget) return;
-    if (moveTarget === '__ungrouped__') {
-      movePrinterMutation.mutate({ printerId: movePrinter.id, location: '' });
-    } else {
-      movePrinterMutation.mutate({ printerId: movePrinter.id, location: moveTarget });
-    }
-  };
-
-  const handleEditLocation = () => {
-    if (!editLocation || !editLocationName.trim()) return;
-    // Check if location already exists (with different name)
-    if (editLocationName.trim() !== editLocation.name &&
-        locations.some(([name]) => name === editLocationName.trim())) {
-      showToast(t('printers.locations.exists', 'Location already exists'), 'error');
-      return;
-    }
-    editLocationMutation.mutate({
-      oldName: editLocation.name,
-      newName: editLocationName.trim(),
-      newIcon: editLocationIcon,
-      newColor: editLocationColor,
-    });
-  };
-
-  const handleCancelEdit = () => {
-    setEditLocation(null);
-    setEditLocationName('');
-    setEditLocationIcon('');
-    setEditLocationColor('');
-  };
-
-  // Bulk selection helpers
-  const togglePrinterSelection = (printerId: number) => {
-    const next = new Set(selectedPrinterIds);
-    if (next.has(printerId)) {
-      next.delete(printerId);
-    } else {
-      next.add(printerId);
-    }
-    setSelectedPrinterIds(next);
-  };
-
-  const clearSelection = () => {
-    setSelectedPrinterIds(new Set());
-    setBulkMoveTarget('');
-  };
-
-  const handleBulkMove = () => {
-    if (selectedPrinterIds.size === 0 || !bulkMoveTarget) return;
-    bulkMoveMutation.mutate({
-      printerIds: Array.from(selectedPrinterIds),
-      location: bulkMoveTarget === '__ungrouped__' ? '' : bulkMoveTarget,
-    });
-  };
-
-  // Group selection helpers
-  const toggleGroupSelection = (groupName: string) => {
-    const next = new Set(selectedGroupNames);
-    if (next.has(groupName)) {
-      next.delete(groupName);
-    } else {
-      next.add(groupName);
-    }
-    setSelectedGroupNames(next);
-  };
-
-  const clearGroupSelection = () => {
-    setSelectedGroupNames(new Set());
-  };
-
-  // Russian pluralization helper — replaces {{count}} in the returned string
-  // Rules: 1→one, 2→few, 3-4→many, 5+→many, 11-14→many, 11-19→many
-  const pluralize = (count: number, one: string, few: string, many: string) => {
-    const abs = Math.abs(count) % 100;
-    const lastDigit = abs % 10;
-    let form: string;
-    // 11-14 always many (русский: 11, 12, 13, 14 групп)
-    if (abs > 10 && abs < 20) form = many;
-    // 1, 21, 31... one (русский: 1, 21, 31 группа)
-    else if (lastDigit === 1) form = one;
-    // 2-4, 22-24 few (русский: 2, 3, 4, 22, 23, 24 группы)
-    else if (lastDigit >= 2 && lastDigit <= 4) form = few;
-    // 0, 5-9, 15-19 many (русский: 0, 5, 6, 7, 8, 9, 10, 15-20 групп)
-    else form = many;
-    return form.replace('{{count}}', String(count));
-  };
-
-  if (isLoading) {
+  if (printersLoading || locationsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 text-bambu-green animate-spin" />
@@ -534,840 +441,282 @@ export function PrinterLocationsPage() {
     );
   }
 
-  const ungroupedCount = locations.find(([name]) => !name)?.[1] || 0;
-  const groupedCount = locations.reduce((sum, [, count]) => sum + count, 0) - ungroupedCount;
+  const deletingPrinterCount = (deleting ?? []).reduce(
+    (sum, name) => sum + (locations?.find((l) => l.name === name)?.printer_count ?? 0),
+    0,
+  );
+  const sortLabel = (mode: SortMode) =>
+    ({
+      'name-asc': t('printers.locations.sortNameAsc'),
+      'name-desc': t('printers.locations.sortNameDesc'),
+      'count-asc': t('printers.locations.sortCountAsc'),
+      'count-desc': t('printers.locations.sortCountDesc'),
+    })[mode];
+
+  const renderPrinter = (printer: Printer, removable: boolean) => (
+    <PrinterRow
+      key={printer.id}
+      printer={printer}
+      status={statusById.get(printer.id)}
+      selected={selectedPrinters.has(printer.id)}
+      canEdit={canEdit && !selectingLocations}
+      busy={busy}
+      onToggle={() => setSelectedPrinters(toggle(selectedPrinters, printer.id))}
+      onMove={() => setMoving({ ids: [printer.id], printerName: printer.name })}
+      onRemove={removable ? () => moveMutation.mutate({ ids: [printer.id], location: null }) : undefined}
+    />
+  );
+
+  const allUngroupedSelected = ungrouped.length > 0 && ungrouped.every((p) => selectedPrinters.has(p.id));
 
   return (
-    <div className="p-4 md:p-8">
-      {/* Header */}
-      <div className="mb-2">
+    <div className="p-4 md:p-8 pb-28">
+      <div className="mb-4">
         <div className="flex items-center gap-3 mb-1">
           <Box className="w-[25px] h-[25px] text-bambu-green" />
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            {t('printers.locations.title', 'Printer Locations')}
-          </h1>
+          <h1 className="text-2xl font-bold text-white">{t('printers.locations.title')}</h1>
         </div>
         <p className="text-sm text-bambu-gray">
-          {t('printers.locations.subtitle', '{{grouped}} grouped, {{ungrouped}} ungrouped', {
-            grouped: groupedCount,
-            ungrouped: ungroupedCount,
-          })}
+          {t('printers.locations.subtitle', { grouped: groupedCount, ungrouped: ungrouped.length })}
         </p>
       </div>
 
-      {/* Search & Add row */}
-      <div className="flex gap-3 mb-6">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3 mb-6">
+        <div className="relative flex-1 min-w-[12rem]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-bambu-gray" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('printers.locations.search', 'Search locations...')}
+            placeholder={t('printers.locations.search')}
+            aria-label={t('printers.locations.search')}
             className="w-full pl-9 pr-4 py-2 text-sm bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
           />
         </div>
-        <Button
-          onClick={() => setHideEmptyGroups(!hideEmptyGroups)}
-          variant={hideEmptyGroups ? 'default' : 'secondary'}
-          className="h-10"
-        >
-          <Box className="w-4 h-4 mr-1" />
-          {hideEmptyGroups
-            ? t('printers.locations.showEmpty', 'Show empty')
-            : t('printers.locations.hideEmpty', 'Hide empty')}
+        <Button onClick={() => setHideEmpty(!hideEmpty)} variant={hideEmpty ? 'primary' : 'secondary'}>
+          {hideEmpty ? t('printers.locations.showEmpty') : t('printers.locations.hideEmpty')}
         </Button>
-        <Button
-          onClick={() => {
-            if (groupSelectionMode) {
-              clearGroupSelection();
-              setGroupSelectionMode(false);
-            } else {
-              setGroupSelectionMode(true);
-            }
-          }}
-          variant={groupSelectionMode ? 'default' : 'secondary'}
-          className="h-10"
-        >
-          <CheckSquare className="w-4 h-4 mr-1" />
-          {groupSelectionMode
-            ? t('printers.locations.selectGroupsActive', 'Done')
-            : t('printers.locations.selectGroups', 'Select')}
-        </Button>
-        <div className="relative">
+        {canEdit && (
           <Button
-            onClick={() => setShowSortMenu(!showSortMenu)}
-            variant="secondary"
-            className="h-10"
+            onClick={() => {
+              setSelectedLocations(new Set());
+              setSelectingLocations(!selectingLocations);
+            }}
+            variant={selectingLocations ? 'primary' : 'secondary'}
           >
-            <ChevronDown className={`w-4 h-4 mr-1 transition-transform duration-200 ${showSortMenu ? 'rotate-180' : ''}`} />
-            {sortMode === 'name-asc' ? t('printers.locations.sortNameAsc', 'Name A→Z') :
-             sortMode === 'name-desc' ? t('printers.locations.sortNameDesc', 'Name Z→A') :
-             sortMode === 'count-asc' ? t('printers.locations.sortCountAsc', 'Count ↑') :
-             t('printers.locations.sortCountDesc', 'Count ↓')}
+            <CheckSquare className="w-4 h-4 mr-1" />
+            {selectingLocations ? t('printers.locations.done') : t('printers.locations.select')}
+          </Button>
+        )}
+        <div className="relative">
+          <Button onClick={() => setShowSortMenu(!showSortMenu)} variant="secondary" aria-haspopup="menu">
+            <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${showSortMenu ? 'rotate-180' : ''}`} />
+            {sortLabel(sortMode)}
           </Button>
           {showSortMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
-              <div className="absolute right-0 top-full mt-1 z-50 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg shadow-lg p-1">
-                {([
-                  ['name-asc', t('printers.locations.sortNameAsc', 'Name A→Z')],
-                  ['name-desc', t('printers.locations.sortNameDesc', 'Name Z→A')],
-                  ['count-asc', t('printers.locations.sortCountAsc', 'Count ↑')],
-                  ['count-desc', t('printers.locations.sortCountDesc', 'Count ↓')],
-                ] as const).map(([mode, label]) => (
+              <div role="menu" className="absolute right-0 top-full mt-1 z-50 bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg shadow-lg p-1 min-w-[10rem]">
+                {SORT_MODES.map((mode) => (
                   <button
                     key={mode}
+                    role="menuitem"
                     onClick={() => {
                       setSortMode(mode);
                       setShowSortMenu(false);
                     }}
                     className={`w-full text-left px-3 py-2 text-sm rounded transition-colors ${
-                      sortMode === mode
-                        ? 'bg-bambu-green text-white'
-                        : 'text-bambu-gray hover:bg-bambu-dark-tertiary hover:text-white'
+                      sortMode === mode ? 'bg-bambu-green text-white' : 'text-bambu-gray hover:bg-bambu-dark-tertiary hover:text-white'
                     }`}
                   >
-                    {label}
+                    {sortLabel(mode)}
                   </button>
                 ))}
               </div>
             </>
           )}
         </div>
-        <Button
-          onClick={() => setCreateLocation(true)}
-          disabled={createLocationMutation.isPending}
-        >
-          <Plus className="w-4 h-4 mr-1" />
-          {t('printers.locations.create', 'New Location')}
-        </Button>
+        {canEdit && (
+          <Button onClick={() => setDialog({ mode: 'create' })}>
+            <Plus className="w-4 h-4 mr-1" />
+            {t('printers.locations.create')}
+          </Button>
+        )}
       </div>
 
-      {/* Locations list */}
-      {displayedLocations.length === 0 && ungroupedCount === 0 ? (
+      {displayed.length === 0 && ungrouped.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12 text-bambu-gray">
-            {search
-              ? t('printers.locations.noResults', 'No locations match your search')
-              : t('printers.locations.none', 'No printer locations yet')}
+            {search ? t('printers.locations.noResults') : t('printers.locations.none')}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {/* Named locations */}
-          {displayedLocations
-            .filter(([name]) => name) // skip ungrouped
-            .map(([name, count]) => {
-              const printersInGroup = getPrintersInLocation(name);
-              const isExpanded = expandedLocation === name;
-
-              return (
-                <Card key={name}>
-                  <CardContent className="p-4">
-                    {/* Group header */}
-                    <div className="flex items-center justify-between relative">
-                      <div
-                        onClick={groupSelectionMode ? undefined : () =>
-                          setExpandedLocation(isExpanded ? null : name)
-                        }
-                        className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer group"
-                        role="button"
-                        tabIndex={groupSelectionMode ? -1 : 0}
-                      >
-                        {groupSelectionMode ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleGroupSelection(name);
-                            }}
-                            className="text-bambu-gray hover:text-bambu-green transition-colors flex-shrink-0"
-                            title={t('printers.locations.selectGroup', 'Select group')}
-                          >
-                            {selectedGroupNames.has(name) ? (
-                              <CheckSquare className="w-4 h-4 text-bambu-green" />
-                            ) : (
-                              <Square className="w-4 h-4" />
-                            )}
-                          </button>
+          {displayed.map((loc) => {
+            const isExpanded = expanded === loc.name;
+            const isSelected = selectedLocations.has(loc.name);
+            return (
+              <Card key={loc.name}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        selectingLocations
+                          ? setSelectedLocations(toggle(selectedLocations, loc.name))
+                          : setExpanded(isExpanded ? null : loc.name)
+                      }
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      aria-expanded={selectingLocations ? undefined : isExpanded}
+                      aria-pressed={selectingLocations ? isSelected : undefined}
+                    >
+                      {selectingLocations ? (
+                        isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-bambu-green flex-shrink-0" />
                         ) : (
-                          <ChevronDown className={`w-4 h-4 text-bambu-gray transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                        )}
-                        <div className="p-2 rounded-lg bg-bambu-dark group-hover:bg-bambu-dark-tertiary transition-colors relative">
-                          {(() => {
-                            const iconName = getLocationIcon(name);
-                            const color = getLocationColor(name);
-                            if (iconName) {
-                              const Icon = getIconByName(iconName);
-                              return <Icon className="w-[25px] h-[25px] text-bambu-gray" />;
-                            }
-                            return <Box className="w-[25px] h-[25px] text-bambu-gray" />;
-                          })()}
-                          {(() => {
-                            const color = getLocationColor(name);
-                            if (!color) return null;
-                            return (
-                              <div
-                                className="absolute top-0 left-0 w-1 h-full rounded-l-lg"
-                                style={{ backgroundColor: color }}
-                              />
-                            );
-                          })()}
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p className="text-white font-medium">{name}</p>
-                          <p className="text-sm text-bambu-gray">
-                            {count} {count === 1 ? t('printers.locations.printer') : t('printers.locations.printers')}
-                          </p>
-                        </div>
+                          <Square className="w-4 h-4 text-bambu-gray flex-shrink-0" />
+                        )
+                      ) : (
+                        <ChevronDown
+                          className={`w-4 h-4 text-bambu-gray flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        />
+                      )}
+                      <LocationIcon location={loc} />
+                      <div className="min-w-0">
+                        <p className="text-white font-medium truncate">{loc.name}</p>
+                        <p className="text-sm text-bambu-gray">{t('printers.locations.printerCount', { count: loc.printer_count })}</p>
                       </div>
+                    </button>
+                    {canEdit && !selectingLocations && (
                       <div className="flex items-center gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {
-                            const icon = getLocationIcon(name);
-                            const color = getLocationColor(name);
-                            setEditLocation({ name });
-                            setEditLocationName(name);
-                            setEditLocationIcon(icon || '');
-                            setEditLocationColor(color || '');
-                          }}
-                          disabled={editLocationMutation.isPending}
+                          onClick={() => setDialog({ mode: 'edit', location: loc })}
+                          disabled={busy}
                           className="text-bambu-gray hover:text-blue-400 hover:bg-blue-500/10"
-                          title={t('printers.locations.edit', 'Edit')}
+                          title={t('common.edit')}
+                          aria-label={t('common.edit')}
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setDeleteConfirm({ name, count })}
+                          onClick={() => setDeleting([loc.name])}
+                          disabled={busy}
                           className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                          title={t('common.delete')}
+                          aria-label={t('common.delete')}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
-                    </div>
-
-                    {/* Expanded printers list */}
-                    {isExpanded && (
-                      <div className="border-t border-bambu-dark-tertiary pt-3 mt-3">
-                        {printersInGroup.length === 0 ? (
-                          <p className="text-sm text-bambu-gray text-center py-4">
-                            {t('printers.locations.noPrinters', 'No printers in this location')}
-                          </p>
-                        ) : (
-                          <div className="space-y-2">
-                            {printersInGroup.map((printer) => {
-                              const status = getPrinterStatus(printer.id);
-                              const isConnected = status?.connected;
-                              const state = status?.state;
-                              const isSelected = selectedPrinterIds.has(printer.id);
-
-                              return (
-                                <div
-                                  key={printer.id}
-                                  className={`flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
-                                    isSelected
-                                      ? 'bg-bambu-green/10 border border-bambu-green/30'
-                                      : 'bg-bambu-dark-secondary hover:bg-bambu-dark'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    {/* Checkbox */}
-                                    <button
-                                      onClick={() => togglePrinterSelection(printer.id)}
-                                      className="text-bambu-gray hover:text-bambu-green transition-colors"
-                                      title={t('printers.locations.selectPrinter', 'Select printer')}
-                                    >
-                                      {isSelected ? (
-                                        <CheckSquare className="w-4 h-4 text-bambu-green" />
-                                      ) : (
-                                        <Square className="w-4 h-4" />
-                                      )}
-                                    </button>
-                                    {/* Status indicator */}
-                                    <div
-                                      className={`w-2.5 h-2.5 rounded-full ${
-                                        isConnected
-                                          ? state === 'RUNNING' || state === 'PAUSE'
-                                            ? 'bg-orange-500'
-                                            : 'bg-bambu-green'
-                                          : 'bg-gray-500'
-                                      }`}
-                                    />
-                                    <div>
-                                      <p className="text-white text-sm font-medium">{printer.name}</p>
-                                      <p className="text-xs text-bambu-gray">
-                                        {printer.model || 'Unknown model'}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    {/* Status badge */}
-                                    {isConnected ? (
-                                      <span
-                                        className={`text-xs px-2 py-1 rounded-full ${
-                                          state === 'RUNNING'
-                                            ? 'bg-orange-500/20 text-orange-400'
-                                            : state === 'PAUSE'
-                                            ? 'bg-yellow-500/20 text-yellow-400'
-                                            : state === 'FINISH'
-                                            ? 'bg-bambu-green/20 text-bambu-green'
-                                            : 'bg-bambu-dark text-bambu-gray'
-                                        }`}
-                                      >
-                                        {state === 'RUNNING'
-                                          ? t('printers.status.printing')
-                                          : state === 'PAUSE'
-                                          ? t('printers.status.paused')
-                                          : state === 'FINISH'
-                                          ? t('printers.status.finished')
-                                          : t('printers.status.idle')}
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs px-2 py-1 rounded-full bg-gray-500/20 text-gray-400">
-                                        Offline
-                                      </span>
-                                    )}
-                                    {/* Move button */}
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => setMovePrinter({ id: printer.id, name: printer.name })}
-                                      disabled={movePrinterMutation.isPending || removeFromGroupMutation.isPending}
-                                      className="text-bambu-gray hover:text-bambu-green hover:bg-bambu-green/10"
-                                      title={t('printers.locations.move', 'Move to another location')}
-                                    >
-                                      <Move className="w-3.5 h-3.5" />
-                                    </Button>
-                                    {/* Remove from group button */}
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => removeFromGroupMutation.mutate({ printerId: printer.id })}
-                                      disabled={removeFromGroupMutation.isPending || movePrinterMutation.isPending}
-                                      className="text-bambu-gray hover:text-red-400 hover:bg-red-500/10"
-                                      title={t('printers.locations.removeFromGroup', 'Remove from group')}
-                                    >
-                                      <UserMinus className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
                     )}
-                  </CardContent>
-                </Card>
-              );
-            })}
+                  </div>
+                  {isExpanded && (
+                    <div className="border-t border-bambu-dark-tertiary pt-3 mt-3 space-y-2">
+                      {(printersByLocation.get(loc.name) ?? []).length === 0 ? (
+                        <p className="text-sm text-bambu-gray text-center py-4">{t('printers.locations.noPrinters')}</p>
+                      ) : (
+                        (printersByLocation.get(loc.name) ?? []).map((p) => renderPrinter(p, true))
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
 
-          {/* Ungrouped printers list */}
-          {ungroupedCount > 0 && (
+          {ungrouped.length > 0 && (
             <div className="pt-4 border-t border-bambu-dark-tertiary">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-bambu-gray">
-                  {t('printers.locations.ungroupedPrinters', 'Ungrouped Printers')}, {pluralize(ungroupedCount, t('printers.locations.printer'), t('printers.locations.printer_few'), t('printers.locations.printer_many'))}
+                  {t('printers.locations.ungroupedPrinters', { count: ungrouped.length })}
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const allUngroupedIds = new Set(getPrintersInLocation('').map(p => p.id));
-                    setSelectedPrinterIds(prev => {
-                      const next = new Set(prev);
-                      const allSelected = Array.from(allUngroupedIds).every(id => next.has(id));
-                      if (allSelected) {
-                        allUngroupedIds.forEach(id => next.delete(id));
-                      } else {
-                        allUngroupedIds.forEach(id => next.add(id));
-                      }
-                      return next;
-                    });
-                  }}
-                  className="text-xs text-bambu-green hover:text-bambu-green-light transition-colors"
-                >
-                  {(() => {
-                    const allUngroupedIds = getPrintersInLocation('').map(p => p.id);
-                    const allSelected = allUngroupedIds.length > 0 && allUngroupedIds.every(id => selectedPrinterIds.has(id));
-                    return allSelected
-                      ? t('common.deselectAll', 'Deselect all')
-                      : t('common.selectAll', 'Select all');
-                  })()}
-                </button>
+                {canEdit && !selectingLocations && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = new Set(selectedPrinters);
+                      ungrouped.forEach((p) => (allUngroupedSelected ? next.delete(p.id) : next.add(p.id)));
+                      setSelectedPrinters(next);
+                    }}
+                    className="text-xs text-bambu-green hover:text-bambu-green-light transition-colors"
+                  >
+                    {allUngroupedSelected ? t('common.deselectAll') : t('common.selectAll')}
+                  </button>
+                )}
               </div>
-              <div className="space-y-2">
-                {getPrintersInLocation('').map((printer) => {
-                  const status = getPrinterStatus(printer.id);
-                  const isConnected = status?.connected;
-                  const state = status?.state;
-                  const isSelected = selectedPrinterIds.has(printer.id);
-
-                  return (
-                    <div
-                      key={printer.id}
-                      className={`flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
-                        !groupSelectionMode && isSelected
-                          ? 'bg-bambu-green/10 border border-bambu-green/30'
-                          : 'bg-bambu-dark-secondary hover:bg-bambu-dark'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* Checkbox — hidden in group selection mode */}
-                        {!groupSelectionMode && (
-                          <button
-                            onClick={() => togglePrinterSelection(printer.id)}
-                            className="text-bambu-gray hover:text-bambu-green transition-colors"
-                            title={t('printers.locations.selectPrinter', 'Select printer')}
-                          >
-                            {isSelected ? (
-                              <CheckSquare className="w-4 h-4 text-bambu-green" />
-                            ) : (
-                              <Square className="w-4 h-4" />
-                            )}
-                          </button>
-                        )}
-                        {/* Status indicator */}
-                        <div
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            isConnected
-                              ? state === 'RUNNING' || state === 'PAUSE'
-                                ? 'bg-orange-500'
-                                : 'bg-bambu-green'
-                              : 'bg-gray-500'
-                          }`}
-                        />
-                        <div>
-                          <p className="text-white text-sm font-medium">{printer.name}</p>
-                          <p className="text-xs text-bambu-gray">
-                            {printer.model || 'Unknown model'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {/* Status badge */}
-                        {isConnected ? (
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full ${
-                              state === 'RUNNING'
-                                ? 'bg-orange-500/20 text-orange-400'
-                                : state === 'PAUSE'
-                                ? 'bg-yellow-500/20 text-yellow-400'
-                                : state === 'FINISH'
-                                ? 'bg-bambu-green/20 text-bambu-green'
-                                : 'bg-bambu-dark text-bambu-gray'
-                            }`}
-                          >
-                            {state === 'RUNNING'
-                              ? t('printers.status.printing')
-                              : state === 'PAUSE'
-                              ? t('printers.status.paused')
-                              : state === 'FINISH'
-                              ? t('printers.status.finished')
-                              : t('printers.status.idle')}
-                          </span>
-                        ) : (
-                          <span className="text-xs px-2 py-1 rounded-full bg-gray-500/20 text-gray-400">
-                            Offline
-                          </span>
-                        )}
-                        {/* Move button — hidden in group selection mode */}
-                        {!groupSelectionMode && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setMovePrinter({ id: printer.id, name: printer.name })}
-                            disabled={movePrinterMutation.isPending}
-                            className="text-bambu-gray hover:text-bambu-green hover:bg-bambu-green/10"
-                            title={t('printers.locations.move', 'Move to another location')}
-                          >
-                            <Move className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <div className="space-y-2">{ungrouped.map((p) => renderPrinter(p, false))}</div>
             </div>
           )}
         </div>
       )}
 
-      {/* Bulk move bar */}
-      {selectedPrinterIds.size > 0 && (
+      {canEdit && !selectingLocations && selectedPrinters.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-bambu-dark border border-bambu-dark-tertiary rounded-xl shadow-2xl px-6 py-4 flex items-center gap-4 z-40">
-          <div className="text-white text-sm">
-            {`${pluralize(selectedPrinterIds.size, t('printers.locations.selected_one'), t('printers.locations.selected_few'), t('printers.locations.selected_many'))}`}
-          </div>
-          <Button
-            onClick={() => setShowBulkMove(true)}
-            disabled={bulkMoveMutation.isPending}
-            className="h-9"
-          >
+          <span className="text-white text-sm">{t('printers.locations.selected', { count: selectedPrinters.size })}</span>
+          <Button onClick={() => setMoving({ ids: Array.from(selectedPrinters) })} disabled={busy}>
             <Move className="w-4 h-4 mr-1" />
-            {t('printers.locations.moveSelected', 'Move')}
+            {t('printers.locations.moveButton')}
           </Button>
-          <Button
-            variant="ghost"
-            onClick={clearSelection}
-            disabled={bulkMoveMutation.isPending}
-            className="h-9 text-bambu-gray hover:text-white"
-          >
+          <Button variant="ghost" onClick={() => setSelectedPrinters(new Set())} disabled={busy}>
             {t('common.cancel')}
           </Button>
         </div>
       )}
 
-      {/* Bulk delete groups bar */}
-      {selectedGroupNames.size > 0 && (
+      {selectingLocations && selectedLocations.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-bambu-dark border border-bambu-dark-tertiary rounded-xl shadow-2xl px-6 py-4 flex items-center gap-4 z-40">
-          <div className="text-white text-sm">
-            {`${pluralize(selectedGroupNames.size, t('printers.locations.selected_one'), t('printers.locations.selected_few'), t('printers.locations.selected_many'))}`}
-          </div>
-          <Button
-            onClick={() => {
-              const names = Array.from(selectedGroupNames);
-              const groupCount = names.length;
-              setDeleteConfirm({
-                name: names.join(', '),
-                count: groupCount,
-                isBulkDelete: true,
-                names,
-              });
-            }}
-            disabled={bulkDeleteGroupsMutation.isPending}
-            className="h-9 bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30"
-          >
+          <span className="text-white text-sm">{t('printers.locations.selected', { count: selectedLocations.size })}</span>
+          <Button variant="danger" onClick={() => setDeleting(Array.from(selectedLocations))} disabled={busy}>
             <Trash2 className="w-4 h-4 mr-1" />
-            {t('printers.locations.deleteSelectedGroups', 'Delete selected')}
+            {t('printers.locations.deleteSelected')}
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              clearGroupSelection();
-              setGroupSelectionMode(false);
-            }}
-            disabled={bulkDeleteGroupsMutation.isPending}
-            className="h-9 text-bambu-gray hover:text-white"
-          >
+          <Button variant="ghost" onClick={() => setSelectedLocations(new Set())} disabled={busy}>
             {t('common.cancel')}
           </Button>
         </div>
       )}
 
-      {/* Bulk Move Modal */}
-      {showBulkMove && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">
-                {t('printers.locations.moveSelectedTitle', 'Move Printers')}
-              </h2>
-              <p className="text-sm text-bambu-gray">
-                {`${pluralize(selectedPrinterIds.size, t('printers.locations.printer'), t('printers.locations.printer_few'), t('printers.locations.printer_many'))}`}
-              </p>
-              <select
-                value={bulkMoveTarget}
-                onChange={(e) => setBulkMoveTarget(e.target.value)}
-                className="w-full px-4 py-2 text-sm bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
-                disabled={bulkMoveMutation.isPending}
-                autoFocus
-              >
-                <option value="" disabled className="text-bambu-gray">
-                  {t('printers.locations.selectLocation', 'Select a location...')}
-                </option>
-                {locations
-                  .filter(([name]) => name)
-                  .map(([name]) => (
-                    <option key={name} value={name} className="text-white">
-                      {name}
-                    </option>
-                  ))}
-                <option value="__ungrouped__" className="text-white">
-                  {t('printers.locations.ungrouped', 'Ungrouped')}
-                </option>
-              </select>
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="secondary"
-                  onClick={() => setShowBulkMove(false)}
-                  disabled={bulkMoveMutation.isPending}
-                >
-                  {t('common.cancel')}
-                </Button>
-                <Button
-                  onClick={handleBulkMove}
-                  disabled={bulkMoveMutation.isPending || !bulkMoveTarget}
-                >
-                  {bulkMoveMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {t('common.saving')}
-                    </>
-                  ) : (
-                    t('printers.locations.moveSelected', 'Move')
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Create Location Modal */}
-      {createLocation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md relative">
-            <CardContent className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">
-                {t('printers.locations.createTitle', 'Create Location')}
-              </h2>
-              <input
-                type="text"
-                value={newLocationName}
-                onChange={(e) => setNewLocationName(e.target.value)}
-                placeholder={t('printers.locations.namePlaceholder', 'Location name')}
-                className="w-full px-4 py-2 text-sm bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreateLocation();
-                  if (e.key === 'Escape') handleCancelCreate();
-                }}
-              />
-              <div>
-                <p className="text-sm text-bambu-gray mb-2">
-                  {t('printers.locations.editIcon', 'Icon')}
-                </p>
-                <IconPicker
-                  value={createLocationIcon}
-                  onChange={setCreateLocationIcon}
-                />
-              </div>
-              <div>
-                <p className="text-sm text-bambu-gray mb-2">
-                  {t('printers.locations.editColor', 'Color')}
-                </p>
-                <div className="flex gap-2 flex-wrap">
-                  {getPresetColors().map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setCreateLocationColor(createLocationColor === color ? '' : color)}
-                      className={`w-8 h-8 rounded-lg transition-all ${
-                        createLocationColor === color
-                          ? 'ring-2 ring-white ring-offset-2 ring-offset-bambu-dark-secondary scale-110'
-                          : 'hover:scale-105'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={color}
-                    />
-                  ))}
-                  {createLocationColor && (
-                    <button
-                      type="button"
-                      onClick={() => setCreateLocationColor('')}
-                      className="w-8 h-8 rounded-lg border-2 border-bambu-dark-tertiary bg-bambu-dark-secondary text-bambu-gray hover:text-white hover:border-bambu-gray transition-all flex items-center justify-center"
-                      title="No color"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="secondary"
-                  onClick={handleCancelCreate}
-                >
-                  {t('common.cancel')}
-                </Button>
-                <Button
-                  onClick={handleCreateLocation}
-                  disabled={createLocationMutation.isPending || !newLocationName.trim()}
-                >
-                  {createLocationMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {t('common.saving')}
-                    </>
-                  ) : (
-                    t('common.create')
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <ConfirmModal
-          onConfirm={() => {
-            if (deleteConfirm.isBulkDelete && deleteConfirm.names) {
-              bulkDeleteGroupsMutation.mutate(deleteConfirm.names);
-            } else {
-              deleteLocationMutation.mutate(deleteConfirm.name);
-            }
-          }}
-          onCancel={() => setDeleteConfirm(null)}
-          title={deleteConfirm.isBulkDelete
-            ? t('printers.locations.deleteSelectedGroupsTitle', 'Delete Selected Groups')
-            : t('printers.locations.deleteTitle', 'Delete Location')}
-          message={deleteConfirm.isBulkDelete
-            ? pluralize(deleteConfirm.count, t('printers.locations.deleteSelectedGroupsDescription_one'), t('printers.locations.deleteSelectedGroupsDescription_few'), t('printers.locations.deleteSelectedGroupsDescription_many'))
-            : pluralize(deleteConfirm.count, t('printers.locations.deleteDescription_one'), t('printers.locations.deleteDescription_few'), t('printers.locations.deleteDescription_many'))}
-          confirmText={t('printers.locations.deleteConfirm', 'Delete')}
-          variant="danger"
-          isLoading={bulkDeleteGroupsMutation.isPending || deleteLocationMutation.isPending}
+      {dialog && (
+        <LocationDialog
+          initial={dialog.mode === 'edit' ? dialog.location : undefined}
+          saving={saveMutation.isPending}
+          onSave={(value) => saveMutation.mutate({ value, location: dialog.mode === 'edit' ? dialog.location : undefined })}
+          onCancel={() => setDialog(null)}
         />
       )}
 
-      {/* Edit Location Modal */}
-      {editLocation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">
-                {t('printers.locations.editTitle', 'Edit Location')}
-              </h2>
-              <input
-                type="text"
-                value={editLocationName}
-                onChange={(e) => setEditLocationName(e.target.value)}
-                placeholder={t('printers.locations.editNamePlaceholder', 'Location name')}
-                className="w-full px-4 py-2 text-sm bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white placeholder-bambu-gray focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleEditLocation();
-                  if (e.key === 'Escape') handleCancelEdit();
-                }}
-              />
-              <div>
-                <p className="text-sm text-bambu-gray mb-2">
-                  {t('printers.locations.editIcon', 'Icon')}
-                </p>
-                <IconPicker
-                  value={editLocationIcon}
-                  onChange={setEditLocationIcon}
-                />
-              </div>
-              <div>
-                <p className="text-sm text-bambu-gray mb-2">
-                  {t('printers.locations.editColor', 'Color')}
-                </p>
-                <div className="flex gap-2 flex-wrap">
-                  {getPresetColors().map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setEditLocationColor(editLocationColor === color ? '' : color)}
-                      className={`w-8 h-8 rounded-lg transition-all ${
-                        editLocationColor === color
-                          ? 'ring-2 ring-white ring-offset-2 ring-offset-bambu-dark-secondary scale-110'
-                          : 'hover:scale-105'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={color}
-                    />
-                  ))}
-                  {editLocationColor && (
-                    <button
-                      type="button"
-                      onClick={() => setEditLocationColor('')}
-                      className="w-8 h-8 rounded-lg border-2 border-bambu-dark-tertiary bg-bambu-dark-secondary text-bambu-gray hover:text-white hover:border-bambu-gray transition-all flex items-center justify-center"
-                      title="No color"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="secondary"
-                  onClick={handleCancelEdit}
-                  disabled={editLocationMutation.isPending}
-                >
-                  {t('common.cancel')}
-                </Button>
-                <Button
-                  onClick={handleEditLocation}
-                  disabled={editLocationMutation.isPending || !editLocationName.trim()}
-                >
-                  {editLocationMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {t('common.saving')}
-                    </>
-                  ) : (
-                    t('printers.locations.editSave', 'Save')
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {moving && (
+        <MoveDialog
+          count={moving.ids.length}
+          printerName={moving.printerName}
+          locations={locations ?? []}
+          saving={moveMutation.isPending}
+          onMove={(location) => moveMutation.mutate({ ids: moving.ids, location })}
+          onCancel={() => setMoving(null)}
+        />
       )}
 
-      {/* Move Printer Modal */}
-      {movePrinter && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">
-                {t('printers.locations.moveTo', 'Move Printer')}
-              </h2>
-              <p className="text-sm text-bambu-gray">
-                {t('printers.locations.movePrinterName', '{{printer}}', { printer: movePrinter.name })}
-              </p>
-
-              {/* Target location selector */}
-              <select
-                value={moveTarget}
-                onChange={(e) => setMoveTarget(e.target.value)}
-                className="w-full px-4 py-2 text-sm bg-bambu-dark-secondary border border-bambu-dark-tertiary rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-bambu-green/50 focus:border-bambu-green transition-colors"
-                disabled={movePrinterMutation.isPending}
-              >
-                <option value="" disabled className="text-bambu-gray">
-                  {t('printers.locations.selectLocation', 'Select a location...')}
-                </option>
-                {/* Existing named locations */}
-                {locations
-                  .filter(([name]) => name) // skip ungrouped
-                  .map(([name]) => (
-                    <option key={name} value={name} className="text-white">
-                      {name}
-                    </option>
-                  ))}
-                {/* Ungrouped option */}
-                <option value="__ungrouped__" className="text-white">
-                  {t('printers.locations.ungrouped', 'Ungrouped')}
-                </option>
-              </select>
-
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="secondary"
-                  onClick={handleCancelMove}
-                  disabled={movePrinterMutation.isPending}
-                >
-                  {t('common.cancel')}
-                </Button>
-                <Button
-                  onClick={handleConfirmMove}
-                  disabled={movePrinterMutation.isPending || !moveTarget}
-                >
-                  {t('common.move')}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {deleting && (
+        <ConfirmModal
+          title={
+            deleting.length === 1
+              ? t('printers.locations.deleteTitle')
+              : t('printers.locations.deleteTitleMany', { count: deleting.length })
+          }
+          message={t('printers.locations.deleteMessage', {
+            count: deletingPrinterCount,
+            names: deleting.join(', '),
+          })}
+          confirmText={t('common.delete')}
+          variant="danger"
+          isLoading={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate(deleting)}
+          onCancel={() => setDeleting(null)}
+        />
       )}
     </div>
   );

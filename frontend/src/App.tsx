@@ -24,6 +24,7 @@ import InventoryPage from './pages/InventoryPage';
 import { MakerworldPage } from './pages/MakerworldPage';
 import { SystemInfoPage } from './pages/SystemInfoPage';
 import { LoginPage } from './pages/LoginPage';
+import { ConnectAuthorizePage } from './pages/ConnectAuthorizePage';
 import { SetupPage } from './pages/SetupPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { GCodeViewerPage } from './pages/GCodeViewerPage';
@@ -181,6 +182,10 @@ function App() {
                 {/* Login page */}
                 <Route path="/login" element={<LoginPage />} />
 
+                {/* "Sign in with Bambuddy" for connected apps: standalone, no layout,
+                    so it also fits inside the sidebar iframe of the app asking. */}
+                <Route path="/connect/authorize" element={<ProtectedRoute><ConnectAuthorizePage /></ProtectedRoute>} />
+
                 {/* Camera page - standalone, no layout, no WebSocket (doesn't need real-time updates) */}
                 <Route path="/camera/:printerId" element={<CameraPage />} />
 
@@ -224,7 +229,7 @@ function App() {
                   <Route path="settings" element={<PermissionRoute permission="settings:read"><SettingsPage /></PermissionRoute>} />
                   <Route path="groups/new" element={<PermissionRoute permission="groups:create"><GroupEditPage /></PermissionRoute>} />
                   <Route path="groups/:id/edit" element={<PermissionRoute permission="groups:update"><GroupEditPage /></PermissionRoute>} />
-                  <Route path="printer-locations" element={<PrinterLocationsPage />} />
+                  <Route path="printer-locations" element={<PermissionRoute permission="printers:read"><PrinterLocationsPage /></PermissionRoute>} />
                   <Route path="users" element={<Navigate to="/settings?tab=users" replace />} />
                   <Route path="groups" element={<Navigate to="/settings?tab=users" replace />} />
                   <Route path="system" element={<SystemInfoPage />} />
